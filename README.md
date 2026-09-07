@@ -24,11 +24,12 @@ tal. Las estadísticas no sirven de nada si mienten.
 
 En construcción. Ver [`docs/FASES.md`](docs/FASES.md).
 
-Hechas las fases 0 a 4: el dominio, la persistencia, el reloj, la barra y la
-ventana. La taza vive en waybar con su cuenta atrás y la ventana la dibuja
-entera: se vacía en el pomodoro, se recarga en el descanso, entra al refri
-cuando aparcas y se queda fría cuando un pomodoro se anula. Falta el tablero
-(Fase 5) y el calendario (Fase 6).
+Hechas las fases 0 a 5: el dominio, la persistencia, el reloj, la barra, la
+ventana y el tablero. La taza vive en waybar con su cuenta atrás y la ventana
+la dibuja entera: se vacía en el pomodoro, se recarga en el descanso, entra al
+refri cuando aparcas y se queda fría cuando un pomodoro se anula. El tablero
+tiene sus cuatro columnas, arrastrar y soltar, y un bote que se vacía al
+archivo. Falta el calendario (Fase 6).
 
 ```bash
 coffe project add strapp

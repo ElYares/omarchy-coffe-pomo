@@ -30,9 +30,20 @@ tiempo del usuario.
 Resumen: el pomodoro es indivisible y no se pausa (interrumpirlo lo anula); si
 empieza tiene que sonar (terminar la tarea antes no corta el reloj); el descanso
 es obligatorio; el descanso largo llega cada 4 pomodoros **completados**; la
-prioridad de una tarea se congela con su primer pomodoro; un pomodoro que venció
-con el equipo dormido se anula en vez de regalarse; y un tramo de trabajo se
-cierra cuando el reloj vuelve a cero, nunca al día siguiente.
+prioridad se congela con el primer pomodoro y **no se descongela reabriendo la
+tarea** —la condición mira `first_started_at`, no el estado—; un pomodoro que
+venció con el equipo dormido se anula en vez de regalarse; y un tramo de trabajo
+se cierra cuando el reloj vuelve a cero, nunca al día siguiente.
+
+**El estado de una tarea lo manda el reloj, no la interfaz.** El tablero no
+escribe estados: le pide al daemon lo que toca al reloj (arrancar, cambiar,
+aparcar, terminar) y solo escribe directo lo que no lo toca. La decisión vive
+en `decidir()` en `app/src-tauri/src/lib.rs`, con pruebas.
+
+Cuando una regla se enseña en la interfaz —el congelado de la prioridad, por
+ejemplo— tiene que mirar **el mismo dato** que el backend. Dos copias de la
+misma regla con condiciones distintas se separan, y el usuario ve un botón
+activo que al pulsarlo falla.
 
 ## Convenciones
 
@@ -52,7 +63,7 @@ cierra cuando el reloj vuelve a cero, nunca al día siguiente.
 ## Comprobar
 
 ```bash
-cargo test                   # 71 pruebas
+cargo test                   # 79 pruebas
 cargo clippy --all-targets   # sin avisos
 cargo fmt --check
 cd app && pnpm build         # tsc estricto + vite

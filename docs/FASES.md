@@ -136,16 +136,26 @@ barra, así que cerrarla no para nada y abrir dos no crea dos relojes.
 
 ---
 
-## [ ] Fase 5 — Tablero kanban
+## [x] Fase 5 — Tablero kanban
 
 **Entrega**: se crean, mueven y priorizan tareas desde la ventana.
 
-- [ ] Columnas por estado, filtro por proyecto y por categoría del árbol
-- [ ] Arrastrar y soltar entre columnas
-- [ ] Alta, media y baja, con el bloqueo de la regla D4 visible en la interfaz
-- [ ] Selector de proyecto que refleja el árbol completo
-- [ ] Iniciar un pomodoro desde la tarjeta
-- [ ] Papelera: las terminadas caen al bote, y vaciarlo las archiva
+Hecha. La regla que sostiene el tablero: **el estado de una tarea lo manda el
+reloj, no la interfaz**. Arrastrar a "En curso" le pide un pomodoro al daemon
+en vez de escribir el estado; si lo escribiera, quedaría una tarea marcada como
+trabajándose sin nada detrás, y las dos mitades contarían días distintos.
+
+Esa decisión vive en una función pura (`decidir`) con sus pruebas, para poder
+comprobarla sin ventana, sin daemon y sin base.
+
+- [x] Columnas por estado, filtro por proyecto y por categoría del árbol
+- [x] Arrastrar y soltar entre columnas, con el arrastre nativo del navegador
+      — son cuatro columnas y una tarjeta, no compensan 40 KB de librería
+- [x] Alta, media y baja, con el bloqueo de la regla D4 visible en la interfaz
+- [x] Selector de proyecto que refleja el árbol completo
+- [x] Iniciar un pomodoro desde la tarjeta, sin cruzar el tablero con el ratón
+- [x] `Ctrl+1` y `Ctrl+2` cambian de vista, y la ventana reabre donde se dejó
+- [x] Papelera: las terminadas caen al bote, y vaciarlo las archiva
 
 ---
 
