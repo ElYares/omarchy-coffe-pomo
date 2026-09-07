@@ -24,9 +24,11 @@ tal. Las estadísticas no sirven de nada si mienten.
 
 En construcción. Ver [`docs/FASES.md`](docs/FASES.md).
 
-Hechas las fases 0 a 3: el dominio, la persistencia, el reloj y la barra. Ya se
-usa a diario —la taza vive en waybar con su cuenta atrás— y falta la ventana
-(Fase 4). 57 pruebas.
+Hechas las fases 0 a 4: el dominio, la persistencia, el reloj, la barra y la
+ventana. La taza vive en waybar con su cuenta atrás y la ventana la dibuja
+entera: se vacía en el pomodoro, se recarga en el descanso, entra al refri
+cuando aparcas y se queda fría cuando un pomodoro se anula. Falta el tablero
+(Fase 5) y el calendario (Fase 6).
 
 ```bash
 coffe project add strapp
@@ -51,8 +53,9 @@ En la barra queda así, con la cuenta atrás moviéndose:
 ☕ 24:40   15% · 2h 00m   ⚡1  🏠1   <   LAN   VOL 70%   PWR 93%
 ```
 
-Clic derecho manda la tarea al refri, el central tira el pomodoro. `SUPER ALT+P`
-alterna arrancar y aparcar sin soltar el teclado.
+Clic izquierdo abre la ventana, el derecho manda la tarea al refri, el central
+tira el pomodoro. `SUPER ALT+P` alterna arrancar y aparcar sin soltar el
+teclado.
 
 Instalación en [`packaging/README.md`](packaging/README.md).
 

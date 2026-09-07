@@ -110,22 +110,29 @@ usan otro vocabulario de colores y hay que elegirles el suyo.
 
 ---
 
-## [ ] Fase 4 — La ventana y la taza
+## [x] Fase 4 — La ventana y la taza
 
 Tauri levantado, tema sincronizado y la pieza de diseño que da nombre al
 proyecto.
 
 **Entrega**: la ventana abre, muestra el estado real y la taza se vacía.
 
-- [ ] Tauri v2 + React + TS + Vite, conectado al socket del daemon
-- [ ] Lector de `colors.toml` a variables CSS; hook `theme-set.d/coffe`
-      para repintar en vivo
-- [ ] Regla de ventana en Hyprland (flotante, tamaño y posición)
-- [ ] Taza en SVG: nivel de café por máscara animada
-- [ ] Estado foco: se vacía · descanso: se recarga
-- [ ] Estado aparcado: la taza entra al refri y sale al retomar
-- [ ] Pomodoro anulado: café frío que se tira
-- [ ] Borde blanco y café americano, fijos, fuera del tema
+Hecha. La ventana no tiene reloj propio: se suscribe al mismo socket que la
+barra, así que cerrarla no para nada y abrir dos no crea dos relojes.
+
+- [x] Tauri v2 + React + TS + Vite, conectado al socket del daemon
+- [x] Lector de `colors.toml` a variables CSS. Repinta solo: en vez del hook
+      `theme-set.d/coffe` se vigila `theme.name`, que es un `stat` de un
+      archivo de diez bytes cada dos segundos y no depende de que el hook esté
+      instalado
+- [x] Regla de ventana en Hyprland (flotante, tamaño y posición)
+- [x] Taza en SVG: nivel de café por máscara animada
+- [x] Estado foco: se vacía · descanso: se recarga
+- [x] Estado aparcado: la taza entra al refri y sale al retomar
+- [x] Pomodoro anulado: café frío que se tira. El snapshot no lo cuenta —el
+      reloj solo pasa a parado— así que se detecta el salto: veníamos de un
+      foco y la tarea no acabó en el refri
+- [x] Borde blanco y café americano, fijos, fuera del tema
 
 ---
 

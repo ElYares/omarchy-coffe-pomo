@@ -22,9 +22,9 @@
     "return-type": "json",
     "restart-interval": 5,
     "tooltip": true,
-    // Izquierdo: saca del refri lo ultimo que guardaste. En la Fase 4 esto
-    // pasara a abrir la ventana con la taza.
-    "on-click": "coffe click resume",
+    // Izquierdo: abre la ventana con la taza, o la trae al frente si ya
+    // estaba. Para arrancar sin soltar el teclado esta SUPER ALT + P.
+    "on-click": "omarchy-launch-or-focus coffe-app 'uwsm-app -- coffe-app'",
     // Derecho: al refri. Anula el pomodoro --el metodo no deja pausarlo-- pero
     // la tarea conserva su tiempo acumulado.
     "on-click-right": "coffe click pause",

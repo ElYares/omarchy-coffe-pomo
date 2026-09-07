@@ -17,6 +17,23 @@ coffe status
 journalctl --user -u coffe -f
 ```
 
+## La ventana
+
+```bash
+cd app && pnpm install && pnpm build && cd ..
+cargo build --release -p coffe-app
+install -Dm755 target/release/coffe-app ~/.local/bin/coffe-app
+
+# La regla de ventana (flotante y centrada):
+#   hypr/windowrules-coffe.conf -> ~/.config/hypr/
+# y anadir su `source` en ~/.config/hypr/hyprland.conf
+```
+
+En desarrollo son dos procesos: `cd app && pnpm dev` levanta Vite en el 1420, y
+`cargo run -p coffe-app` abre la ventana contra ese servidor. En una compilacion
+de depuracion Tauri usa `devUrl`, no `dist`: sin Vite corriendo la ventana abre
+con "Connection refused".
+
 ## La barra y los atajos
 
 ```bash

@@ -188,6 +188,27 @@ demás toma color de `~/.config/omarchy/current/theme/colors.toml`.
   la sesión que estaba desarrollando la tarea termina. Mismo patrón que los
   hooks `quest-state.sh` y `claude-notify.sh` que ya corren.
 
+## La ventana
+
+React + TypeScript sobre Tauri v2. No tiene reloj propio: se suscribe al mismo
+socket que la barra y pinta lo que llega. Cerrarla no para un pomodoro y abrir
+dos no crea dos relojes.
+
+**La taza es SVG dibujado a mano**, no una imagen: el nivel del café tiene que
+moverse con el reloj, y lo que se anima es la altura de un rectángulo recortado
+por el interior de la taza. La transición dura un segundo y es lineal, que es
+exactamente el ritmo al que llegan los snapshots — así el nivel baja de corrido
+en vez de a saltos.
+
+**Tauri v2 exige declarar permisos.** Sin `capabilities/default.json` con
+`core:event:allow-listen`, la ventana arranca, pinta y responde a `invoke`,
+pero **no recibe un solo evento**: se queda con el primer estado, congelada,
+sin un error visible en la interfaz. El aviso solo sale por la consola del
+webview.
+
+El tema se relee vigilando `theme.name` y no `colors.toml`: el segundo se
+reescribe entero al cambiar de tema y se puede leer a medias.
+
 ## Rutas
 
 | Qué | Dónde |

@@ -10,8 +10,10 @@ saber en qué punto está el trabajo.
 ```
 crates/coffe-core/   dominio (machine.rs), persistencia (db/), servicio (service.rs)
 crates/coffe-ipc/    protocolo del socket + cliente síncrono
-crates/coffe-cli/    binario `coffe`: CLI (main.rs, tareas.rs) y daemon (daemon.rs)
-packaging/           unidad de systemd y notas de instalación
+crates/coffe-cli/    binario `coffe`: CLI, daemon (daemon.rs) y barra (barra.rs)
+app/                 la ventana: React + TS sobre Tauri v2
+app/src-tauri/       su backend: comandos, tema y el hilo suscrito al reloj
+packaging/           systemd, waybar, hyprland y notas de instalación
 ```
 
 `service.rs` es el puente: aplica un comando a la máquina y escribe lo que sus
@@ -50,10 +52,20 @@ cierra cuando el reloj vuelve a cero, nunca al día siguiente.
 ## Comprobar
 
 ```bash
-cargo test                   # 56 pruebas
+cargo test                   # 71 pruebas
 cargo clippy --all-targets   # sin avisos
 cargo fmt --check
+cd app && pnpm build         # tsc estricto + vite
 ```
+
+La ventana en desarrollo son **dos procesos**: `cd app && pnpm dev` levanta Vite
+en el 1420 y `cargo run -p coffe-app` abre contra él. En depuración Tauri usa
+`devUrl`, no `dist`: sin Vite la ventana abre con "Connection refused".
+
+**Tauri v2 exige `capabilities/default.json`.** Sin `core:event:allow-listen`
+la ventana arranca, pinta y responde a `invoke`, pero no recibe un solo evento:
+se queda congelada en el primer estado, sin error visible. El aviso solo sale
+por la consola del webview.
 
 Para probar el daemon sin tocar los datos reales, apunta `XDG_DATA_HOME`,
 `XDG_CONFIG_HOME` y `XDG_RUNTIME_DIR` a otro sitio. **`XDG_RUNTIME_DIR` tiene
