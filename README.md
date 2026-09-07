@@ -14,7 +14,8 @@ tal. Las estadísticas no sirven de nada si mienten.
   `clientes / nutricore`, a la profundidad que haga falta.
 - **Tablero kanban** con prioridad alta, media y baja, que se congela en cuanto
   la tarea arranca.
-- **Calendario** de entregas, para ver el día imposible antes de vivirlo.
+- **Calendario** de entregas que hace la resta: *«mañana no cabe, sobran 2
+  pomodoros»*. Ver el día imposible antes de vivirlo.
 - **Tiempos que se pueden auditar**: tiempo efectivo contra tiempo de
   calendario, pomodoros tirados y por qué, e interrupciones internas y externas.
 - **Sin ventana abierta**: el reloj lo lleva un daemon; waybar y la app solo lo
@@ -29,7 +30,8 @@ ventana y el tablero. La taza vive en waybar con su cuenta atrás y la ventana
 la dibuja entera: se vacía en el pomodoro, se recarga en el descanso, entra al
 refri cuando aparcas y se queda fría cuando un pomodoro se anula. El tablero
 tiene sus cuatro columnas, arrastrar y soltar, y un bote que se vacía al
-archivo. Falta el calendario (Fase 6).
+archivo. Y el calendario no solo dice cuándo vence cada cosa: dice si cabe.
+Falta el vault y los hooks de Claude (Fase 7) y los reportes (Fase 8).
 
 ```bash
 coffe project add strapp

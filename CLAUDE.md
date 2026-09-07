@@ -63,7 +63,7 @@ activo que al pulsarlo falla.
 ## Comprobar
 
 ```bash
-cargo test                   # 79 pruebas
+cargo test                   # 87 pruebas
 cargo clippy --all-targets   # sin avisos
 cargo fmt --check
 cd app && pnpm build         # tsc estricto + vite

@@ -159,15 +159,27 @@ comprobarla sin ventana, sin daemon y sin base.
 
 ---
 
-## [ ] Fase 6 — Calendario
+## [x] Fase 6 — Calendario
 
 **Entrega**: ver qué se entrega y cuándo.
 
-- [ ] Fecha de entrega por tarea
-- [ ] Vista de mes y vista de agenda
-- [ ] Señal visual de vencida y de vence hoy
-- [ ] Carga estimada por día, en pomodoros, para ver el día imposible antes
-      de vivirlo
+Hecho. Lo que da el valor no es el calendario sino **la resta**: si lo que
+vence de aquí al martes cabe en los días que quedan. Vive en
+`coffe_core::agenda`, es una función pura con ocho pruebas, y lo primero que se
+lee en la ventana es su veredicto.
+
+Lo vencido y sin hacer no se reparte hacia atrás: cae entero sobre hoy.
+Repartirlo por los días en que se prometió sería contarse un cuento, porque en
+esos días ya no queda capacidad.
+
+- [x] Fecha de entrega por tarea
+- [x] Vista de mes y vista de agenda
+- [x] Señal visual de vencida y de vence hoy
+- [x] Carga estimada por día, en pomodoros, para ver el día imposible antes
+      de vivirlo. Se compara contra `[agenda] pomodoros_por_dia` (8 por
+      defecto) y los fines de semana no suman capacidad salvo que se diga
+- [x] Una tarea sin estimación sale en el calendario pero **no pesa**:
+      inventarle un número dejaría el total sin significado
 
 ---
 

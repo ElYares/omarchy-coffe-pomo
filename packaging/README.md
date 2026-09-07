@@ -78,6 +78,14 @@ long_break_minutes = 15
 long_break_every = 4
 strict = true
 max_pomodoros_per_task = 7
+
+[agenda]
+# Con que se compara la carga de un dia en el calendario. Ocho pomodoros son
+# cuatro horas de foco, que ya es un dia honesto.
+pomodoros_por_dia = 8
+# Por defecto el fin de semana no suma capacidad: una agenda que da por hecho
+# que trabajas el sabado esconde justo el problema que deberia ensenar.
+fines_de_semana = false
 ```
 
 `strict = false` permite pausar y reanudar el pomodoro y saltarse el descanso.
