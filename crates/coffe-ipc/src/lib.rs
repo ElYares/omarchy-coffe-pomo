@@ -104,6 +104,11 @@ pub struct Snapshot {
     pub completed_since_long_break: u32,
     pub long_break_every: u32,
     pub task: Option<TaskBrief>,
+    /// La última tarea que se mandó al refri, si sigue ahí. La ventana la
+    /// necesita para dibujar el refri: cuando hay una tarea aparcada el reloj
+    /// está parado, así que `task` va vacío y sin esto no habría forma de
+    /// saber que hay algo esperando.
+    pub parked: Option<TaskBrief>,
     /// Pomodoros que sonaron hoy, en día local.
     pub pomodoros_hoy: u32,
     /// Tazas en el bote: tareas terminadas sin archivar.

@@ -13,6 +13,7 @@ use coffe_ipc::{Phase, Snapshot, TaskBrief};
 #[derive(Debug, Clone, Default)]
 pub struct Base {
     pub task: Option<TaskBrief>,
+    pub parked: Option<TaskBrief>,
     pub pomodoros_hoy: u32,
     pub en_papelera: u32,
 }
@@ -22,21 +23,35 @@ impl Base {
         let db = svc.db();
         let task = match svc.state().task_id() {
             None => None,
-            Some(id) => {
-                let t = db.tarea(id)?;
-                Some(TaskBrief {
-                    id: t.id,
-                    title: t.title,
-                    project: db.ruta_proyecto(t.project_id)?,
-                    priority: t.priority,
-                    estimate_pomodoros: t.estimate_pomodoros,
-                    done_pomodoros: db.pomodoros_de_tarea(id)?,
-                })
-            }
+            Some(id) => Some(breve(db, id)?),
+        };
+        // Con una tarea en el refri el reloj está parado, así que `task` va
+        // vacío: sin esto la ventana no tendría forma de saber que hay algo
+        // esperando, que es justo lo que dibuja el refri.
+        let parked = match db.ultima_aparcada()? {
+            Some(t) => Some(breve(db, t.id)?),
+            None => None,
         };
 
-        Ok(Self { task, pomodoros_hoy: db.pomodoros_hoy(now)?, en_papelera: db.en_papelera()? })
+        Ok(Self {
+            task,
+            parked,
+            pomodoros_hoy: db.pomodoros_hoy(now)?,
+            en_papelera: db.en_papelera()?,
+        })
     }
+}
+
+fn breve(db: &coffe_core::Db, id: i64) -> Result<TaskBrief> {
+    let t = db.tarea(id)?;
+    Ok(TaskBrief {
+        id: t.id,
+        title: t.title,
+        project: db.ruta_proyecto(t.project_id)?,
+        priority: t.priority,
+        estimate_pomodoros: t.estimate_pomodoros,
+        done_pomodoros: db.pomodoros_de_tarea(id)?,
+    })
 }
 
 pub fn snapshot(svc: &Service, base: &Base, now: DateTime<Utc>) -> Snapshot {
@@ -57,6 +72,7 @@ pub fn snapshot(svc: &Service, base: &Base, now: DateTime<Utc>) -> Snapshot {
         completed_since_long_break: m.completed_since_long_break(),
         long_break_every: m.config().long_break_every,
         task: base.task.clone(),
+        parked: base.parked.clone(),
         pomodoros_hoy: base.pomodoros_hoy,
         en_papelera: base.en_papelera,
         now,
