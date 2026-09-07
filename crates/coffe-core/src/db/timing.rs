@@ -1,11 +1,11 @@
 //! Lo que mide el tiempo: pomodoros, tramos de tarea, interrupciones, y el
 //! estado del reloj para sobrevivir a un reinicio.
 
-use super::{Db, a_texto, de_texto_opt};
+use super::{Db, a_texto, de_texto, de_texto_opt};
 use crate::error::CoffeError;
 use crate::machine::{SessionEnd, TimerState};
 use crate::model::{InterruptionKind, VoidReason};
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Duration, Utc};
 use rusqlite::{OptionalExtension, params};
 use serde::{Deserialize, Serialize};
 
@@ -29,6 +29,9 @@ pub struct ResumenTarea {
     pub veces_aparcada: u32,
     pub interrupciones_internas: u32,
     pub interrupciones_externas: u32,
+    /// Segundos en los que Claude estuvo trabajando en esta tarea, medidos por
+    /// los hooks. No es una estimación: si no se midió, es cero.
+    pub segundos_con_claude: i64,
 }
 
 impl Db {
@@ -237,6 +240,16 @@ impl Db {
             |f| Ok((f.get(0)?, f.get(1)?)),
         )?;
 
+        let segundos_con_claude: i64 = self.conn.query_row(
+            "SELECT COALESCE(SUM(
+                 CAST(strftime('%s', ended_at) AS INTEGER)
+               - CAST(strftime('%s', started_at) AS INTEGER)
+             ), 0)
+             FROM claude_spans WHERE task_id = ?1 AND ended_at IS NOT NULL",
+            params![task_id],
+            |f| f.get(0),
+        )?;
+
         let segundos_calendario = match (tarea.first_started_at, tarea.completed_at) {
             (Some(ini), Some(fin)) => Some((fin - ini).num_seconds()),
             _ => None,
@@ -252,6 +265,7 @@ impl Db {
             veces_aparcada: aparcada,
             interrupciones_internas: internas,
             interrupciones_externas: externas,
+            segundos_con_claude,
         })
     }
 }
@@ -285,6 +299,62 @@ impl Db {
             "SELECT COUNT(*) FROM pomodoros WHERE task_id = ?1 AND outcome = 'completed'",
             params![task_id],
             |f| f.get(0),
+        )?)
+    }
+}
+
+/// Los tramos que midieron los hooks de Claude Code.
+impl Db {
+    /// Abre un tramo de Claude sobre la tarea que se esté trabajando.
+    ///
+    /// Si ya había uno abierto para ese directorio no hace nada: los hooks se
+    /// disparan por cada mensaje, no una vez por sesión.
+    pub fn abrir_claude(
+        &self,
+        task_id: i64,
+        pomodoro_id: Option<i64>,
+        cwd: &str,
+        now: DateTime<Utc>,
+    ) -> Result<bool, CoffeError> {
+        let n = self.conn.execute(
+            "INSERT INTO claude_spans (task_id, pomodoro_id, cwd, started_at)
+             SELECT ?1, ?2, ?3, ?4
+             WHERE NOT EXISTS (
+                 SELECT 1 FROM claude_spans WHERE cwd = ?3 AND ended_at IS NULL
+             )",
+            params![task_id, pomodoro_id, cwd, a_texto(now)],
+        )?;
+        Ok(n > 0)
+    }
+
+    /// Cierra el tramo de ese directorio. Devuelve cuántos segundos duró.
+    pub fn cerrar_claude(&self, cwd: &str, now: DateTime<Utc>) -> Result<Option<i64>, CoffeError> {
+        let abierto = self
+            .conn
+            .query_row(
+                "SELECT id, started_at FROM claude_spans WHERE cwd = ?1 AND ended_at IS NULL",
+                params![cwd],
+                |f| Ok((f.get::<_, i64>(0)?, f.get::<_, String>(1)?)),
+            )
+            .optional()?;
+
+        let Some((id, desde)) = abierto else { return Ok(None) };
+        let desde = de_texto(&desde)?;
+
+        self.conn.execute(
+            "UPDATE claude_spans SET ended_at = ?2 WHERE id = ?1",
+            params![id, a_texto(now)],
+        )?;
+        Ok(Some((now - desde).num_seconds().max(0)))
+    }
+
+    /// Cierra los tramos que quedaran abiertos. Lo llama el daemon al arrancar:
+    /// una sesión de Claude que murió de golpe no puede dejar un tramo contando
+    /// para siempre.
+    pub fn cerrar_claude_huerfanos(&self, now: DateTime<Utc>) -> Result<usize, CoffeError> {
+        Ok(self.conn.execute(
+            "UPDATE claude_spans SET ended_at = started_at WHERE ended_at IS NULL AND started_at < ?1",
+            params![a_texto(now - Duration::hours(12))],
         )?)
     }
 }

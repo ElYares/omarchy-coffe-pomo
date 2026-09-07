@@ -34,6 +34,10 @@ impl Service {
         // no estaba, la propia máquina decide si sonó o si se perdió.
         let fx = svc.ejecutar(Command::Tick, now)?;
 
+        // Una sesión de Claude que murió de golpe deja su tramo abierto. Sin
+        // cerrarlo, el resumen diría que Claude lleva tres días trabajando.
+        svc.db.cerrar_claude_huerfanos(now)?;
+
         // Y lo que quedara abierto de una caída sucia se cierra ahora, no
         // dentro de tres días cuando alguien mire el reporte.
         if svc.machine.state().is_idle() {
