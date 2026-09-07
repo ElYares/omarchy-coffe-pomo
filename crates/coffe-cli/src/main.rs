@@ -8,6 +8,7 @@
 //! tiene el daemon. Los de gestión (`project`, `task`) van directos a SQLite,
 //! y así siguen funcionando con el daemon apagado.
 
+mod barra;
 mod daemon;
 mod tareas;
 mod vista;
@@ -29,6 +30,17 @@ struct Cli {
 enum Cmd {
     /// Arranca el reloj. Normalmente lo lanza systemd, no tú.
     Daemon,
+
+    /// Una línea de JSON para el módulo de waybar.
+    Bar {
+        /// Se queda suscrito e imprime una línea por segundo. Es lo que usa la
+        /// barra; sin esto waybar tendría que relanzar el proceso cada segundo.
+        #[arg(long)]
+        watch: bool,
+    },
+
+    /// Un botón del ratón desde la barra. Avisa del resultado por notificación.
+    Click { accion: String },
 
     /// Cómo va todo.
     Status {
@@ -149,6 +161,9 @@ struct TrashArgs {
 fn main() -> Result<()> {
     match Cli::parse().cmd {
         Cmd::Daemon => arrancar_daemon(),
+
+        Cmd::Bar { watch } => barra::imprimir(watch),
+        Cmd::Click { accion } => barra::clic(&accion),
 
         Cmd::Status { json } => {
             let snap = pedir(&Request::Status)?;

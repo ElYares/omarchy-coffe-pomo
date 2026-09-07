@@ -170,6 +170,7 @@ dependencies = [
  "clap",
  "coffe-core",
  "coffe-ipc",
+ "serde",
  "serde_json",
  "tokio",
 ]
