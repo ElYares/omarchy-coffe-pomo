@@ -7,6 +7,8 @@
 mod tema;
 
 use anyhow::Result;
+use coffe_core::agenda::{DiaAgenda, Vencimiento, planificar};
+use coffe_core::config::Config;
 use coffe_core::db::projects::Project;
 use coffe_core::db::tasks::{CambiosTarea, FiltroTareas, NuevaTarea, Task};
 use coffe_core::model::{InterruptionKind, Priority, TaskState};
@@ -27,6 +29,7 @@ const OJO_AL_TEMA: Duration = Duration::from_secs(2);
 
 struct Estado {
     db: Mutex<Db>,
+    cfg: Config,
 }
 
 // ------------------------------------------------------------------ vistas
@@ -322,6 +325,41 @@ fn vaciar_papelera(estado: State<'_, Estado>) -> Result<usize, String> {
     Ok(n)
 }
 
+/// El plan de los próximos días: qué vence, cuánto se debe y si cabe.
+///
+/// La cuenta la hace `coffe_core::agenda`, que es puro y está probado. Aquí
+/// solo se junta lo que hay en la base con la configuración.
+#[tauri::command]
+fn agenda(estado: State<'_, Estado>, dias: u32) -> Result<Vec<DiaAgenda>, String> {
+    let db = estado.db.lock().map_err(|e| e.to_string())?;
+    let tareas = db.tareas(&FiltroTareas::default()).map_err(|e| e.to_string())?;
+
+    let vencimientos: Vec<Vencimiento> = tareas
+        .iter()
+        // Lo hecho ya no se debe, y lo que no tiene fecha no vence.
+        .filter(|t| t.state != TaskState::Done && t.state != TaskState::Archived)
+        .filter_map(|t| {
+            let fecha = t.due_date.as_deref()?.parse().ok()?;
+            // Sin estimación no se puede sumar. Aparece en el calendario como
+            // tarea, pero no pesa: inventarle un número sería peor que no
+            // contarla, porque el total dejaría de significar nada.
+            let estimados = t.estimate_pomodoros?;
+            let hechos = db.pomodoros_de_tarea(t.id).unwrap_or(0);
+            Some(Vencimiento { fecha, pomodoros: estimados.saturating_sub(hechos) })
+        })
+        .collect();
+
+    let hoy = chrono::Local::now().date_naive();
+    Ok(planificar(hoy, &vencimientos, dias.clamp(1, 180), &estado.cfg.agenda))
+}
+
+/// La configuración en uso, para que la ventana no tenga que adivinar cuántos
+/// pomodoros caben en un día ni si el modo estricto está puesto.
+#[tauri::command]
+fn config(estado: State<'_, Estado>) -> Config {
+    estado.cfg.clone()
+}
+
 /// Un cambio escrito directo en la base no genera ningún evento del reloj, así
 /// que la barra seguiría enseñando el número de tazas de antes. Un `Status` lo
 /// obliga a releer y a empujar el estado nuevo a todo el mundo.
@@ -381,7 +419,8 @@ pub fn run() {
     tauri::Builder::default()
         .setup(|app| {
             let db = Db::open(&paths::database())?;
-            app.manage(Estado { db: Mutex::new(db) });
+            let cfg = Config::load(&paths::config())?;
+            app.manage(Estado { db: Mutex::new(db), cfg });
             seguir_al_reloj(app.handle().clone());
             seguir_al_tema(app.handle().clone());
             Ok(())
@@ -398,7 +437,9 @@ pub fn run() {
             editar_tarea,
             mover_de_proyecto,
             borrar_tarea,
-            vaciar_papelera
+            vaciar_papelera,
+            agenda,
+            config
         ])
         .run(tauri::generate_context!())
         .expect("la ventana no pudo arrancar");

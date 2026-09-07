@@ -102,3 +102,44 @@ export function reloj(s: Snapshot): string {
   const seg = s.remaining_secs % 60;
   return `${String(m).padStart(2, "0")}:${String(seg).padStart(2, "0")}`;
 }
+
+/** Un día del plan, tal como lo calcula `coffe_core::agenda`. */
+export interface DiaAgenda {
+  /** `AAAA-MM-DD`. */
+  fecha: string;
+  laborable: boolean;
+  /** Pomodoros que vencen exactamente ese día. */
+  debidos: number;
+  /** Todo lo que vence desde hoy hasta ese día, inclusive. */
+  deuda_acumulada: number;
+  capacidad_acumulada: number;
+  /** Lo que se debe para entonces ya no cabe en lo que queda. */
+  imposible: boolean;
+}
+
+export interface Config {
+  pomodoro: {
+    focus_minutes: number;
+    short_break_minutes: number;
+    long_break_minutes: number;
+    long_break_every: number;
+    strict: boolean;
+    max_pomodoros_per_task: number;
+  };
+  agenda: { pomodoros_por_dia: number; fines_de_semana: boolean };
+}
+
+/** `AAAA-MM-DD` de hoy en hora local. `toISOString` daría el día en UTC, que
+ *  de madrugada es otro día y desplazaría el calendario entero. */
+export function hoyLocal(): string {
+  const d = new Date();
+  const mes = String(d.getMonth() + 1).padStart(2, "0");
+  const dia = String(d.getDate()).padStart(2, "0");
+  return `${d.getFullYear()}-${mes}-${dia}`;
+}
+
+/** Pomodoros que le faltan a una tarea. Sin estimación no se puede decir. */
+export function pendientes(t: Tarea): number | null {
+  if (t.estimate_pomodoros === null) return null;
+  return Math.max(0, t.estimate_pomodoros - t.pomodoros);
+}

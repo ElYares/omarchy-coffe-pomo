@@ -1,17 +1,29 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { Calendario } from "./Calendario";
 import { Tablero } from "./Tablero";
 import { Taza, type EstadoTaza } from "./Taza";
 import { useReloj, useTareas, useTema } from "./reloj";
 import { ETIQUETA_PRIORIDAD, reloj, type Snapshot, type Tarea } from "./tipos";
 
-type Vista = "taza" | "tablero";
+type Vista = "taza" | "tablero" | "calendario";
 
 /** La ventana reabre donde se dejó. Es una preferencia, no un dato: si el
  *  navegador no deja leerla, se arranca en la taza y ya. */
-const vistaGuardada: Vista =
-  (typeof localStorage !== "undefined" && localStorage.getItem("coffe.vista")) === "tablero"
-    ? "tablero"
-    : "taza";
+const VISTAS: Vista[] = ["taza", "tablero", "calendario"];
+const NOMBRE_VISTA: Record<Vista, string> = {
+  taza: "Taza",
+  tablero: "Tablero",
+  calendario: "Calendario",
+};
+
+const vistaGuardada: Vista = (() => {
+  try {
+    const v = localStorage.getItem("coffe.vista");
+    return VISTAS.includes(v as Vista) ? (v as Vista) : "taza";
+  } catch {
+    return "taza";
+  }
+})();
 
 /**
  * `Ctrl+1` y `Ctrl+2` cambian de vista. La ventana no tiene menú ni barra de
@@ -23,8 +35,8 @@ function useAtajosDeVista(setVista: (v: Vista) => void) {
   useEffect(() => {
     function alPulsar(e: KeyboardEvent) {
       if (!e.ctrlKey || e.altKey || e.metaKey) return;
-      const destino: Vista | null =
-        e.key === "1" ? "taza" : e.key === "2" ? "tablero" : null;
+      const n = Number(e.key);
+      const destino = n >= 1 && n <= VISTAS.length ? VISTAS[n - 1] : null;
       if (!destino) return;
       e.preventDefault();
       setVista(destino);
@@ -55,26 +67,28 @@ export default function App() {
   if (caido && !snap) return <RelojApagado motivo={caido} />;
   if (!snap) return <div className="cargando">Sirviendo café…</div>;
 
+  function irA(v: Vista) {
+    setVista(v);
+    try {
+      localStorage.setItem("coffe.vista", v);
+    } catch {
+      // Modo privado o almacenamiento lleno: las pestañas siguen funcionando,
+      // solo no se recuerda cuál era.
+    }
+  }
+
   return (
     <div className="ventana">
       <header className="barra" data-tauri-drag-region>
         <span className="barra__nombre">coffe</span>
         <nav className="pestanas">
-          {(["taza", "tablero"] as Vista[]).map((v) => (
+          {VISTAS.map((v) => (
             <button
               key={v}
               className={`pestana${vista === v ? " pestana--puesta" : ""}`}
-              onClick={() => {
-                setVista(v);
-                try {
-                  localStorage.setItem("coffe.vista", v);
-                } catch {
-                  // Modo privado o almacenamiento lleno: no es motivo para
-                  // que dejen de funcionar las pestañas.
-                }
-              }}
+              onClick={() => irA(v)}
             >
-              {v === "taza" ? "Taza" : "Tablero"}
+              {NOMBRE_VISTA[v]}
             </button>
           ))}
         </nav>
@@ -97,9 +111,18 @@ export default function App() {
             <Cola tareas={tareas} snap={snap} ordenar={ordenar} />
           </aside>
         </main>
-      ) : (
+      ) : vista === "tablero" ? (
         <main className="principal principal--tablero">
           <Tablero tareas={tareas} proyectos={proyectos} snap={snap} recargar={recargar} />
+        </main>
+      ) : (
+        <main className="principal principal--tablero">
+          <Calendario
+            tareas={tareas}
+            // Pulsar una entrega lleva al tablero: el calendario dice CUÁNDO,
+            // el tablero es donde se hace algo al respecto.
+            alElegir={() => irA("tablero")}
+          />
         </main>
       )}
 

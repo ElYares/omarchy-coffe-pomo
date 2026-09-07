@@ -731,3 +731,266 @@ body {
 .bote__tazas {
   opacity: 0.55;
 }
+
+/* --- el calendario ----------------------------------------------------- */
+
+.calendario {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  height: 100%;
+  min-height: 0;
+}
+
+.calendario__barra {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.calendario__vistas {
+  display: flex;
+  gap: 4px;
+}
+
+.calendario__vacio {
+  color: var(--tenue);
+  font-size: 13px;
+}
+
+/* El veredicto es lo primero que hay que leer: si algo no cabe, enterarse no
+   puede depender de contar casillas. */
+.veredicto {
+  font-size: 13px;
+}
+
+.veredicto--cabe {
+  color: var(--tenue);
+}
+
+.veredicto--no-cabe {
+  padding: 6px 10px;
+  border-left: 3px solid var(--alta);
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--alta) 10%, transparent);
+}
+
+.mes__cabeza {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  justify-content: center;
+}
+
+.mes__cabeza h2 {
+  min-width: 200px;
+  font-size: 14px;
+  font-weight: 600;
+  text-align: center;
+}
+
+.mes {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  /* La primera fila es la de los nombres y va a su aire; las semanas se
+     reparten lo que sobra. Sin el `grid-template-rows`, `grid-auto-rows` se
+     aplicaba también a los nombres y dejaba un hueco de semana entera. */
+  grid-template-rows: auto;
+  grid-auto-rows: minmax(0, 1fr);
+  gap: 4px;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.mes__dia-semana {
+  padding-bottom: 2px;
+  color: var(--tenue);
+  font-size: 11px;
+  text-align: center;
+}
+
+.mes__hueco {
+  border-radius: 7px;
+}
+
+.mes__celda {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-height: 0;
+  padding: 4px 5px;
+  border: 1px solid var(--borde);
+  border-radius: 7px;
+  overflow: hidden;
+}
+
+.mes__celda--descanso {
+  background: color-mix(in srgb, var(--tinta) 3%, transparent);
+}
+
+.mes__celda--hoy {
+  border-color: color-mix(in srgb, var(--acento) 60%, transparent);
+}
+
+.mes__celda--hoy .mes__numero {
+  color: var(--acento);
+  font-weight: 700;
+}
+
+/* Vencida y sin hacer: es deuda, y tiene que gritar más que un día apretado. */
+.mes__celda--vencida {
+  border-color: color-mix(in srgb, var(--alta) 55%, transparent);
+}
+
+.mes__celda--imposible {
+  background: color-mix(in srgb, var(--alta) 9%, transparent);
+}
+
+.mes__numero {
+  color: var(--tenue);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.mes__tareas {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  list-style: none;
+}
+
+.mes__tarea {
+  display: block;
+  width: 100%;
+  padding: 1px 4px;
+  border: none;
+  border-left: 2px solid var(--tenue);
+  border-radius: 3px;
+  background: var(--placa);
+  color: inherit;
+  font: inherit;
+  font-size: 10px;
+  line-height: 1.4;
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.prioridad-borde--high {
+  border-left-color: var(--alta);
+}
+.prioridad-borde--medium {
+  border-left-color: var(--media);
+}
+.prioridad-borde--low {
+  border-left-color: var(--baja);
+}
+
+.mes__resto,
+.mes__carga {
+  color: var(--tenue);
+  font-size: 10px;
+}
+
+.mes__carga {
+  margin-top: auto;
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- la agenda --------------------------------------------------------- */
+
+.agenda {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.agenda__dia {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.agenda__cabeza {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding-bottom: 3px;
+  border-bottom: 1px solid var(--borde);
+}
+
+.agenda__cabeza h3 {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+}
+
+/* Solo la primera letra. `text-transform: capitalize` pone en mayúscula cada
+   palabra y deja "Mié 9 De Septiembre", que en español está mal. */
+.agenda__cabeza h3::first-letter,
+.mes__cabeza h2::first-letter {
+  text-transform: uppercase;
+}
+
+.agenda__cabeza span {
+  color: var(--tenue);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.agenda__dia--apretado .agenda__cabeza,
+.agenda__dia--vencida .agenda__cabeza {
+  border-bottom-color: color-mix(in srgb, var(--alta) 55%, transparent);
+}
+
+.agenda__dia--apretado .agenda__cabeza h3,
+.agenda__dia--vencida .agenda__cabeza h3 {
+  color: var(--alta);
+}
+
+.agenda__tarea {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 2px 8px;
+  padding: 6px 8px;
+  border: none;
+  border-radius: 7px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.agenda__tarea:hover {
+  background: var(--placa);
+}
+
+.agenda__titulo {
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agenda__meta {
+  color: var(--tenue);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.agenda__proyecto {
+  grid-column: 2 / -1;
+  color: var(--tenue);
+  font-size: 11px;
+}
