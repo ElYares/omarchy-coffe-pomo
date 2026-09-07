@@ -33,6 +33,7 @@ fn tarea(db: &Db, proyecto_id: i64, titulo: &str) -> i64 {
             estimate_pomodoros: Some(2),
             due_date: None,
             vault_note: None,
+            vault_id: None,
         },
         t0(),
     )
@@ -187,6 +188,7 @@ fn las_tareas_salen_por_entrega_y_luego_por_prioridad() {
         estimate_pomodoros: None,
         due_date: due.map(String::from),
         vault_note: None,
+        vault_id: None,
     };
 
     db.crear_tarea(nueva("sin fecha", Priority::High, None), t0()).unwrap();

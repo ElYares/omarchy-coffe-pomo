@@ -38,6 +38,7 @@ fn base() -> (Db, i64) {
                 estimate_pomodoros: Some(3),
                 due_date: None,
                 vault_note: None,
+                vault_id: None,
             },
             t0(),
         )
@@ -164,6 +165,7 @@ fn la_recuperacion_conserva_el_foco_que_seguia_vivo() {
                     estimate_pomodoros: None,
                     due_date: None,
                     vault_note: None,
+                    vault_id: None,
                 },
                 t0(),
             )
@@ -209,6 +211,7 @@ fn un_pomodoro_que_vencio_con_el_daemon_caido_se_anula() {
                     estimate_pomodoros: None,
                     due_date: None,
                     vault_note: None,
+                    vault_id: None,
                 },
                 t0(),
             )
@@ -251,6 +254,7 @@ fn cambiar_de_tarea_aparca_una_y_arranca_la_otra() {
                 estimate_pomodoros: None,
                 due_date: None,
                 vault_note: None,
+                vault_id: None,
             },
             t0(),
         )

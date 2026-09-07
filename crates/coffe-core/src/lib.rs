@@ -11,6 +11,7 @@ pub mod machine;
 pub mod model;
 pub mod paths;
 pub mod service;
+pub mod vault;
 
 pub use config::Config;
 pub use db::Db;

@@ -260,3 +260,28 @@ impl Db {
         Ok(())
     }
 }
+
+impl Db {
+    /// La carpeta del proyecto dentro del vault, o `None` para desligarlo.
+    pub fn fijar_vault(&self, id: i64, carpeta: Option<&str>) -> Result<(), CoffeError> {
+        let n = self
+            .conn
+            .execute("UPDATE projects SET vault_path = ?2 WHERE id = ?1", params![id, carpeta])?;
+        if n == 0 {
+            return Err(CoffeError::NoExiste { que: "proyecto", id });
+        }
+        Ok(())
+    }
+
+    /// El proyecto ligado a una carpeta del vault.
+    pub fn proyecto_por_vault(&self, carpeta: &str) -> Result<Option<Project>, CoffeError> {
+        self.conn
+            .query_row(
+                "SELECT * FROM projects WHERE vault_path = ?1 AND archived = 0",
+                params![carpeta],
+                fila_a_proyecto,
+            )
+            .optional()?
+            .transpose()
+    }
+}

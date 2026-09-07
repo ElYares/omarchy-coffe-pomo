@@ -3,6 +3,7 @@
 use super::{Db, a_texto, de_texto, de_texto_opt};
 use crate::error::CoffeError;
 use crate::model::{Priority, TaskState};
+use crate::vault::{Destino, NotaHallada, PRIORIDAD_POR_DEFECTO, destino};
 use chrono::{DateTime, Utc};
 use rusqlite::{OptionalExtension, Row, params};
 use serde::{Deserialize, Serialize};
@@ -19,6 +20,9 @@ pub struct Task {
     /// `YYYY-MM-DD` en hora local: una entrega es un día, no un instante.
     pub due_date: Option<String>,
     pub vault_note: Option<String>,
+    /// El ID de la historia en el vault: `HU-001`. Es lo que la identifica,
+    /// porque el nombre del archivo cambia y este no.
+    pub vault_id: Option<String>,
     pub position: i64,
     pub created_at: DateTime<Utc>,
     pub first_started_at: Option<DateTime<Utc>>,
@@ -34,6 +38,9 @@ pub struct NuevaTarea {
     pub estimate_pomodoros: Option<u32>,
     pub due_date: Option<String>,
     pub vault_note: Option<String>,
+    /// El ID de la historia en el vault: `HU-001`. Es lo que la identifica,
+    /// porque el nombre del archivo cambia y este no.
+    pub vault_id: Option<String>,
 }
 
 /// Lo que Cirillo diría de una estimación. No bloquea nada: avisa.
@@ -76,8 +83,8 @@ impl Db {
         self.conn.execute(
             "INSERT INTO tasks
                (project_id, title, notes, priority, state, estimate_pomodoros,
-                due_date, vault_note, position, created_at)
-             VALUES (?1, ?2, ?3, ?4, 'pending', ?5, ?6, ?7, ?8, ?9)",
+                due_date, vault_note, vault_id, position, created_at)
+             VALUES (?1, ?2, ?3, ?4, 'pending', ?5, ?6, ?7, ?8, ?9, ?10)",
             params![
                 nueva.project_id,
                 nueva.title,
@@ -86,6 +93,7 @@ impl Db {
                 nueva.estimate_pomodoros,
                 nueva.due_date,
                 nueva.vault_note,
+                nueva.vault_id,
                 position,
                 a_texto(now),
             ],
@@ -243,6 +251,7 @@ fn fila_a_tarea(f: &Row<'_>) -> rusqlite::Result<Result<Task, CoffeError>> {
             estimate_pomodoros: f.get("estimate_pomodoros")?,
             due_date: f.get("due_date")?,
             vault_note: f.get("vault_note")?,
+            vault_id: f.get("vault_id")?,
             position: f.get("position")?,
             created_at: de_texto(&created_at)?,
             first_started_at: de_texto_opt(first)?,
@@ -394,5 +403,126 @@ impl Db {
         }
         self.conn.execute("DELETE FROM tasks WHERE id = ?1", params![id])?;
         Ok(())
+    }
+}
+
+/// Lo que pasó al traerse un Backlog del vault.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Importacion {
+    pub creadas: u32,
+    pub actualizadas: u32,
+    /// Terminadas o descartadas: no son trabajo.
+    pub omitidas: u32,
+    /// Notas sin `prioridad` escrita, que entraron con la de por defecto.
+    pub sin_prioridad: Vec<String>,
+    /// Estados que el lector no reconoce. Entran como pendientes, pero hay que
+    /// mirarlos: puede que la convención del vault haya cambiado.
+    pub estados_raros: Vec<(String, String)>,
+    /// Tareas ya empezadas cuya prioridad cambió en el vault y **no** se tocó.
+    pub prioridad_congelada: Vec<String>,
+}
+
+impl Db {
+    /// Trae un Backlog al tablero. Es **idempotente**: se identifica cada tarea
+    /// por su nota, así que volver a importar actualiza en vez de duplicar.
+    ///
+    /// Lo que el vault NO manda: el estado ni el tiempo. Una tarea que ya está
+    /// en curso sigue en curso aunque su nota diga otra cosa — el vault sabe qué
+    /// hay que hacer, coffe sabe qué se está haciendo.
+    pub fn sincronizar_notas(
+        &self,
+        project_id: i64,
+        halladas: &[NotaHallada],
+        incluir_terminadas: bool,
+        now: DateTime<Utc>,
+    ) -> Result<Importacion, CoffeError> {
+        self.proyecto(project_id)?;
+        let mut r = Importacion::default();
+
+        for hallada in halladas {
+            let nota = &hallada.nota;
+
+            if destino(nota, incluir_terminadas) == Destino::Omitir {
+                r.omitidas += 1;
+                continue;
+            }
+            if !nota.estado_conocido {
+                r.estados_raros.push((nota.titulo.clone(), nota.estado.clone()));
+            }
+            if nota.prioridad.is_none() {
+                r.sin_prioridad.push(nota.titulo.clone());
+            }
+            let prioridad = nota.prioridad.unwrap_or(PRIORIDAD_POR_DEFECTO);
+
+            match self.tarea_por_vault(project_id, &nota.id)? {
+                Some(existente) => {
+                    // El título y la fecha se refrescan siempre; el estado no se
+                    // toca nunca.
+                    self.editar_tarea(
+                        existente.id,
+                        &CambiosTarea {
+                            title: Some(nota.titulo.clone()),
+                            due_date: nota.entrega.clone().map(Some),
+                            estimate_pomodoros: nota.pomodoros.map(Some),
+                            // La ruta se refresca por si la nota se renombró:
+                            // es lo que abre el archivo desde la tarjeta.
+                            vault_note: Some(Some(hallada.ruta.clone())),
+                            ..Default::default()
+                        },
+                    )?;
+                    // La prioridad, solo si la tarea aún no arrancó. Que el vault
+                    // reescriba con qué urgencia se trabajó algo sería el mismo
+                    // agujero que cerramos en el tablero.
+                    if existente.priority != prioridad {
+                        match self.cambiar_prioridad(existente.id, prioridad) {
+                            Ok(()) => {}
+                            Err(CoffeError::PrioridadCongelada { .. }) => {
+                                r.prioridad_congelada.push(nota.titulo.clone())
+                            }
+                            Err(e) => return Err(e),
+                        }
+                    }
+                    r.actualizadas += 1;
+                }
+                None => {
+                    self.crear_tarea(
+                        NuevaTarea {
+                            project_id,
+                            title: nota.titulo.clone(),
+                            notes: None,
+                            priority: prioridad,
+                            estimate_pomodoros: nota.pomodoros,
+                            due_date: nota.entrega.clone(),
+                            vault_note: Some(hallada.ruta.clone()),
+                            vault_id: Some(nota.id.clone()),
+                        },
+                        now,
+                    )?;
+                    r.creadas += 1;
+                }
+            }
+        }
+
+        Ok(r)
+    }
+
+    /// La tarea que vino de una historia concreta del vault, si existe.
+    ///
+    /// Se busca por el ID de la historia y no por la ruta del archivo: el
+    /// nombre cambia cuando alguien arregla una errata en el título, y con la
+    /// ruta como identidad la siguiente importación crearía un duplicado.
+    pub fn tarea_por_vault(
+        &self,
+        project_id: i64,
+        vault_id: &str,
+    ) -> Result<Option<Task>, CoffeError> {
+        self.conn
+            .query_row(
+                "SELECT * FROM tasks WHERE project_id = ?1 AND vault_id = ?2",
+                params![project_id, vault_id],
+                fila_a_tarea,
+            )
+            .optional()?
+            .transpose()
     }
 }

@@ -127,6 +127,43 @@ const MIGRACIONES: &[&str] = &[
         updated_at                 TEXT    NOT NULL
     );
     "#,
+    // v2 — la identidad de una nota del vault es su ID, no su nombre de archivo.
+    //
+    // Renombrar un HU para arreglar una errata en el título es normal, y con la
+    // ruta como identidad la siguiente importación creaba un duplicado en vez
+    // de actualizar. `vault_note` se queda: es lo que permite volver a la nota
+    // desde la tarjeta, y se refresca en cada importación.
+    r#"
+    ALTER TABLE tasks ADD COLUMN vault_id TEXT;
+
+    -- Un mismo HU-001 puede existir en dos proyectos distintos; dentro de uno,
+    -- no dos veces.
+    CREATE UNIQUE INDEX tasks_nota_por_proyecto
+        ON tasks(project_id, vault_id) WHERE vault_id IS NOT NULL;
+    "#,
+    // v3 — cuánto del trabajo se hizo con Claude.
+    //
+    // Lo miden los hooks de Claude Code, que abren un tramo al empezar a
+    // responder y lo cierran al parar. No se estima ni se deduce: si no hay
+    // pomodoro corriendo, no se apunta nada.
+    r#"
+    CREATE TABLE claude_spans (
+        id          INTEGER PRIMARY KEY,
+        task_id     INTEGER NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+        pomodoro_id INTEGER REFERENCES pomodoros(id) ON DELETE SET NULL,
+        -- El directorio de la sesión. Es la clave para poder tener varias
+        -- sesiones de Claude a la vez en proyectos distintos.
+        cwd         TEXT    NOT NULL,
+        started_at  TEXT    NOT NULL,
+        ended_at    TEXT
+    );
+
+    -- Un tramo abierto por directorio, no uno en todo el sistema: trabajar con
+    -- dos sesiones de Claude en dos repos es lo normal, no un error.
+    CREATE UNIQUE INDEX claude_spans_uno_por_cwd
+        ON claude_spans(cwd) WHERE ended_at IS NULL;
+    CREATE INDEX claude_spans_por_tarea ON claude_spans(task_id);
+    "#,
 ];
 
 /// Sube la base hasta la última versión. Es idempotente.
