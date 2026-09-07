@@ -216,12 +216,40 @@ prioridad si ya se trabajó.
 
 ---
 
-## [ ] Fase 8 — Reportes y empaquetado
+## [x] Fase 8 — Reportes y empaquetado
 
 **Entrega**: instalable, y con las respuestas que motivaron el proyecto.
 
-- [ ] Reportes: tiempo efectivo contra tiempo de calendario, interrupciones
+Hecha. `coffe report` responde las tres preguntas de la primera conversación:
+cuánto costó de verdad, en qué proyecto se va el tiempo, y si tus estimaciones
+sirven de algo.
+
+Con una regla al pintar: **ningún número aparece solo**. Cuarenta pomodoros en
+cuatro días no es lo mismo que en veinte, así que el total va con sus días; y un
+factor de estimación sobre dos tareas se enseña diciendo que no es una
+tendencia, porque callarlo invitaría a creérselo.
+
+- [x] Reportes: tiempo efectivo contra tiempo de calendario, interrupciones
       por tarea, carga por proyecto y por categoría, precisión de la estimación
-- [ ] Exportación a CSV
-- [ ] `install.sh`: binarios, unidad de systemd, módulo de waybar, hooks
-- [ ] `README` con capturas
+- [x] Exportación a CSV
+- [x] `install.sh`: binarios y unidad de systemd. **No** toca waybar, hyprland
+      ni la configuración de Claude: son archivos con historia y con decisiones
+      del usuario dentro, así que dice qué pegar y dónde
+- [x] Probado corriéndolo de verdad, no solo leyéndolo
+- [x] `README` con capturas de la taza en sus tres estados, la barra, el
+      tablero y el calendario
+
+
+---
+
+## Después
+
+Lo que queda fuera de las ocho fases, apuntado para no perderlo:
+
+- **Los otros cuatro temas de waybar.** El módulo está en `nordfjell`;
+  `midnight-statusline` y `windows-xp` usan otro vocabulario de colores y hay
+  que elegirles el suyo.
+- **Una vista de reportes en la ventana.** Hoy los reportes son solo de
+  terminal, que basta para leerlos pero no para mirarlos de reojo.
+- **El arrastre del tablero nunca se ejecutó con un ratón de verdad.** La regla
+  de destino tiene pruebas y el tablero renderiza, pero el gesto no se probó.

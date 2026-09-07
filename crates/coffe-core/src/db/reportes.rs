@@ -181,7 +181,7 @@ impl Db {
             }
         }
 
-        cargas.sort_by(|a, b| b.segundos_efectivos.cmp(&a.segundos_efectivos));
+        cargas.sort_by_key(|c| std::cmp::Reverse(c.segundos_efectivos));
         Ok(cargas)
     }
 
@@ -243,17 +243,12 @@ impl Db {
              ORDER BY p.started_at",
         )?;
 
-        let crudas: Vec<(
-            String,
-            Option<String>,
-            Option<String>,
-            Option<String>,
-            i64,
-            i64,
-            i64,
-            String,
-            i64,
-        )> = stmt
+        // La fila cruda, tal como sale de SQLite. El nombre existe para que
+        // el tipo no ocupe diez líneas en medio de la consulta.
+        type Cruda =
+            (String, Option<String>, Option<String>, Option<String>, i64, i64, i64, String, i64);
+
+        let crudas: Vec<Cruda> = stmt
             .query_map(params![a_texto(desde), a_texto(hasta)], |f| {
                 Ok((
                     f.get(0)?,
