@@ -11,6 +11,7 @@
 mod barra;
 mod claude;
 mod daemon;
+mod reportes;
 mod tareas;
 mod vault;
 mod vista;
@@ -93,6 +94,13 @@ enum Cmd {
 
     /// Las tazas del bote.
     Trash(TrashArgs),
+
+    /// En qué se te fue el tiempo.
+    Report(ReportArgs),
+
+    /// Saca los datos crudos en CSV, para mirarlos donde quieras.
+    #[command(subcommand)]
+    Export(ExportCmd),
 
     /// El vault de Obsidian: de dónde salen las tareas.
     #[command(subcommand)]
@@ -273,6 +281,24 @@ struct ListArgs {
 }
 
 #[derive(Args)]
+struct ReportArgs {
+    /// Cuántos días atrás mirar.
+    #[arg(long, short, default_value_t = 7)]
+    dias: u32,
+}
+
+#[derive(Subcommand)]
+enum ExportCmd {
+    /// Un renglón por pomodoro.
+    Pomodoros {
+        #[arg(long, short, default_value_t = 90)]
+        dias: u32,
+    },
+    /// Un renglón por tarea, con sus tres medidas del tiempo.
+    Tareas,
+}
+
+#[derive(Args)]
 struct TrashArgs {
     /// Vacía el bote: archiva todas las terminadas.
     #[arg(long)]
@@ -341,6 +367,8 @@ fn main() -> Result<()> {
         Cmd::Project(cmd) => tareas::proyectos(&abrir_db()?, cmd),
         Cmd::Task(cmd) => tareas::tareas(&abrir_db()?, &config()?, cmd),
         Cmd::Trash(args) => tareas::papelera(&abrir_db()?, args.empty),
+        Cmd::Report(args) => reportes::pintar(&abrir_db()?, args.dias),
+        Cmd::Export(cmd) => reportes::exportar(&abrir_db()?, cmd),
         Cmd::Vault(cmd) => vault::ejecutar(&abrir_db()?, &config()?, cmd),
 
         // Los hooks corren en cada mensaje: pase lo que pase, salen con 0. Un
