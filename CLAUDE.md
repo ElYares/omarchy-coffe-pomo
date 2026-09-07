@@ -85,6 +85,14 @@ assets embebidos; con cargo a secas el binario de release sigue apuntando a
 la ventana, y es fácil confundirlo con una instancia de desarrollo que quedó
 viva.
 
+**Tauri se traga el drag-and-drop de la página.** Engancha el DnD del sistema
+—soltar archivos sobre la ventana— y con eso las tarjetas se arrastran pero el
+`drop` no llega nunca. Se apaga con `"dragDropEnabled": false` en la ventana de
+`tauri.conf.json`. Y **WebKit exige que `dragstart` escriba en `dataTransfer`**;
+sin esa línea, tampoco hay drop. Las dos cosas juntas, o no funciona.
+
+`tauri.conf.json` es **JSON estricto**: un comentario lo rompe.
+
 **Tauri v2 exige `capabilities/default.json`.** Sin `core:event:allow-listen`
 la ventana arranca, pinta y responde a `invoke`, pero no recibe un solo evento:
 se queda congelada en el primer estado, sin error visible. El aviso solo sale

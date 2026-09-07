@@ -7,7 +7,17 @@
 // trabajándose sin ningún pomodoro detrás.
 //
 // El arrastre es el nativo del navegador, sin librería: son cuatro columnas y
-// una tarjeta, y no compensa traerse cuarenta kilobytes para eso.
+// una tarjeta, y no compensa traerse cuarenta kilobytes para eso. Tiene dos
+// trampas y las dos costaron que no funcionara nada:
+//
+//   - Tauri engancha el drag-and-drop del SISTEMA —soltar archivos sobre la
+//     ventana— y al hacerlo se traga los eventos de arrastre de la propia
+//     página. Se apaga con `dragDropEnabled: false` en tauri.conf.json.
+//   - WebKit exige que `dragstart` escriba algo en `dataTransfer`. Sin eso el
+//     arrastre se ve, pero el `drop` no llega nunca.
+//
+// El id de la tarjeta viaja DENTRO del dataTransfer y no solo en el estado de
+// React: es el dato que el navegador garantiza que llega al drop.
 
 import { useMemo, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
@@ -21,11 +31,11 @@ import {
 
 type Columna = "pending" | "in_progress" | "paused" | "done";
 
-const COLUMNAS: { id: Columna; titulo: string; pista: string }[] = [
-  { id: "pending", titulo: "Pendientes", pista: "sin empezar" },
-  { id: "in_progress", titulo: "En curso", pista: "soltar aquí sirve el café" },
-  { id: "paused", titulo: "En el refri", pista: "empezadas y aparcadas" },
-  { id: "done", titulo: "Hechas", pista: "esperando el bote" },
+const COLUMNAS: { id: Columna; titulo: string; corto: string; pista: string }[] = [
+  { id: "pending", titulo: "Pendientes", corto: "pendiente", pista: "sin empezar" },
+  { id: "in_progress", titulo: "En curso", corto: "en curso", pista: "soltar aquí sirve el café" },
+  { id: "paused", titulo: "En el refri", corto: "al refri", pista: "empezadas y aparcadas" },
+  { id: "done", titulo: "Hechas", corto: "hecha", pista: "esperando el bote" },
 ];
 
 interface Props {
@@ -83,11 +93,14 @@ export function Tablero({ tareas, proyectos, snap, recargar }: Props) {
     recargar();
   }
 
-  async function soltar(columna: Columna) {
-    const id = arrastrando;
+  async function soltar(columna: Columna, cargado: string) {
+    // El id viene del dataTransfer, con el estado de React como red de
+    // seguridad: si el arrastre empezó antes de un re-render, `arrastrando`
+    // puede haberse perdido, pero el dato que lleva el navegador no.
+    const id = Number(cargado) || arrastrando;
     setArrastrando(null);
     setEncima(null);
-    if (id !== null) await mover(id, columna);
+    if (id) await mover(id, columna);
   }
 
   async function vaciar() {
@@ -138,10 +151,14 @@ export function Tablero({ tareas, proyectos, snap, recargar }: Props) {
               onDragOver={(e) => {
                 // Sin esto el navegador no deja soltar. No es opcional.
                 e.preventDefault();
+                e.dataTransfer.dropEffect = "move";
                 setEncima(col.id);
               }}
               onDragLeave={() => setEncima((c) => (c === col.id ? null : c))}
-              onDrop={() => soltar(col.id)}
+              onDrop={(e) => {
+                e.preventDefault();
+                soltar(col.id, e.dataTransfer.getData("text/plain"));
+              }}
             >
               <header className="columna__cabeza">
                 <h2>{col.titulo}</h2>
@@ -223,7 +240,13 @@ function Tarjeta({
     <li
       className={`tarjeta${activa ? " tarjeta--activa" : ""}`}
       draggable
-      onDragStart={alArrastrar}
+      onDragStart={(e) => {
+        // WebKit no considera valido un arrastre que no escribe nada aqui: sin
+        // esta linea la tarjeta se arrastra y el `drop` no llega nunca.
+        e.dataTransfer.setData("text/plain", String(tarea.id));
+        e.dataTransfer.effectAllowed = "move";
+        alArrastrar();
+      }}
       onDragEnd={alSoltarse}
     >
       <button className="tarjeta__cuerpo" onClick={() => setAbierta((v) => !v)}>
@@ -249,6 +272,18 @@ function Tarjeta({
               Servir el café
             </button>
           )}
+
+          {/* La misma acción que arrastrar, con un clic. No es solo comodidad:
+              el arrastre depende de que el webview se porte bien, y una tarjeta
+              que solo se puede mover arrastrándola es una tarjeta que a veces
+              no se puede mover. */}
+          <div className="tarjeta__mover">
+            {COLUMNAS.filter((c) => c.id !== tarea.state && c.id !== "in_progress").map((c) => (
+              <button key={c.id} className="chip" onClick={() => alMover(c.id)}>
+                {c.corto}
+              </button>
+            ))}
+          </div>
           <Estimador tarea={tarea} recargar={recargar} alFallar={alFallar} />
 
           <div className="tarjeta__prioridades">

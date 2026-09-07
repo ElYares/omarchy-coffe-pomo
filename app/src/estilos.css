@@ -1046,3 +1046,14 @@ body {
   min-width: 26px;
   opacity: 0.6;
 }
+
+/* Mover sin arrastrar. Una tarjeta que solo se puede mover arrastrándola es una
+   tarjeta que a veces no se puede mover. */
+.tarjeta__mover {
+  display: flex;
+  gap: 4px;
+}
+
+.tarjeta__mover .chip {
+  flex: 1;
+}

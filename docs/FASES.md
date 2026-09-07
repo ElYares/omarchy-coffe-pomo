@@ -252,4 +252,6 @@ Lo que queda fuera de las ocho fases, apuntado para no perderlo:
 - **Una vista de reportes en la ventana.** Hoy los reportes son solo de
   terminal, que basta para leerlos pero no para mirarlos de reojo.
 - **El arrastre del tablero nunca se ejecutó con un ratón de verdad.** La regla
-  de destino tiene pruebas y el tablero renderiza, pero el gesto no se probó.
+  de destino tiene pruebas y el tablero renderiza, pero el gesto no se probó
+  desde aquí. Se reportó roto y se arreglaron sus dos causas conocidas
+  —`dragDropEnabled` y `dataTransfer`—; queda confirmarlo a mano.
