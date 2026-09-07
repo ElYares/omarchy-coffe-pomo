@@ -9,7 +9,9 @@ use chrono::Utc;
 use coffe_core::Db;
 use coffe_core::config::Config;
 use coffe_core::db::projects::{NuevoProyecto, Project};
-use coffe_core::db::tasks::{AvisoEstimacion, FiltroTareas, NuevaTarea, revisar_estimacion};
+use coffe_core::db::tasks::{
+    AvisoEstimacion, CambiosTarea, FiltroTareas, NuevaTarea, revisar_estimacion,
+};
 use coffe_core::model::TaskState;
 use coffe_ipc::{Phase, Snapshot};
 
@@ -24,16 +26,9 @@ pub fn proyectos(db: &Db, cmd: ProjectCmd) -> Result<()> {
                 None => None,
                 Some(p) => Some(resolver_proyecto(db, &p)?),
             };
-            // Una ruta relativa aquí sería una bomba de relojería: se guarda
-            // para compararla con el cwd de otra sesión.
             let repo = match repo {
                 None => None,
-                Some(r) => Some(
-                    std::fs::canonicalize(&r)
-                        .with_context(|| format!("no existe la carpeta {r}"))?
-                        .display()
-                        .to_string(),
-                ),
+                Some(r) => Some(canonica(&r)?),
             };
 
             let id = db.crear_proyecto(
@@ -48,8 +43,8 @@ pub fn proyectos(db: &Db, cmd: ProjectCmd) -> Result<()> {
             println!("[{id}] {}", db.ruta_proyecto(id)?);
         }
 
-        ProjectCmd::List => {
-            let todos = db.proyectos(false)?;
+        ProjectCmd::List { all } => {
+            let todos = db.proyectos(all)?;
             if todos.is_empty() {
                 println!("Todavía no hay proyectos. Empieza con:");
                 println!("  coffe project add strapp");
@@ -60,8 +55,75 @@ pub fn proyectos(db: &Db, cmd: ProjectCmd) -> Result<()> {
                 println!("{}", linea_proyecto(&todos, p));
             }
         }
+
+        ProjectCmd::Rename { proyecto, nombre } => {
+            let id = resolver_proyecto(db, &proyecto)?;
+            db.renombrar_proyecto(id, &nombre)?;
+            println!("[{id}] {}", db.ruta_proyecto(id)?);
+        }
+
+        ProjectCmd::Move { proyecto, parent, root } => {
+            let id = resolver_proyecto(db, &proyecto)?;
+            let destino = match (&parent, root) {
+                (Some(p), _) => Some(resolver_proyecto(db, p)?),
+                (None, true) => None,
+                (None, false) => anyhow::bail!("dime a dónde: --parent <proyecto> o --root"),
+            };
+            db.mover_proyecto(id, destino)?;
+            println!("[{id}] {}", db.ruta_proyecto(id)?);
+        }
+
+        ProjectCmd::Repo { proyecto, ruta, clear } => {
+            let id = resolver_proyecto(db, &proyecto)?;
+            match (ruta, clear) {
+                (Some(r), _) => {
+                    let abs = canonica(&r)?;
+                    db.fijar_repo(id, Some(&abs))?;
+                    println!("[{id}] {} ← {abs}", db.ruta_proyecto(id)?);
+                }
+                (None, true) => {
+                    db.fijar_repo(id, None)?;
+                    println!("[{id}] {} — sin repo", db.ruta_proyecto(id)?);
+                }
+                (None, false) => anyhow::bail!("dime la ruta, o --clear para quitarla"),
+            }
+        }
+
+        ProjectCmd::Archive { proyecto } => {
+            let id = resolver_proyecto(db, &proyecto)?;
+            let ruta = db.ruta_proyecto(id)?;
+            let n = db.archivar_proyecto(id, true)?;
+            println!("Archivado: {ruta} ({n} proyecto(s), contando lo que colgaba)");
+        }
+
+        ProjectCmd::Restore { proyecto } => {
+            let id = resolver_proyecto(db, &proyecto)?;
+            let n = db.archivar_proyecto(id, false)?;
+            println!("De vuelta: {} ({n} proyecto(s))", db.ruta_proyecto(id)?);
+        }
+
+        ProjectCmd::Rm { proyecto, force } => {
+            let id = resolver_proyecto(db, &proyecto)?;
+            let ruta = db.ruta_proyecto(id)?;
+            let (hijos, tareas) = db.contenido_proyecto(id)?;
+            db.borrar_proyecto(id, force)?;
+            if hijos > 0 || tareas > 0 {
+                println!("Borrado: {ruta} — con {hijos} subproyecto(s) y {tareas} tarea(s)");
+            } else {
+                println!("Borrado: {ruta}");
+            }
+        }
     }
     Ok(())
+}
+
+/// Una ruta relativa guardada aquí sería una bomba de relojería: se compara
+/// contra el cwd de otra sesión, que puede estar en cualquier sitio.
+fn canonica(r: &str) -> Result<String> {
+    Ok(std::fs::canonicalize(r)
+        .with_context(|| format!("no existe la carpeta {r}"))?
+        .display()
+        .to_string())
 }
 
 /// Sangra según la profundidad, para que el árbol se lea como árbol.
@@ -74,7 +136,8 @@ fn linea_proyecto(todos: &[Project], p: &Project) -> String {
     }
     let sangria = "  ".repeat(nivel);
     let repo = p.repo_path.as_deref().map(|r| format!("  ← {r}")).unwrap_or_default();
-    format!("{sangria}[{}] {}{repo}", p.id, p.name)
+    let archivado = if p.archived { "  (archivado)" } else { "" };
+    format!("{sangria}[{}] {}{repo}{archivado}", p.id, p.name)
 }
 
 /// Acepta el id o la ruta de slugs (`personal/labs`). Los ids son cómodos para
@@ -163,8 +226,74 @@ pub fn tareas(db: &Db, cfg: &Config, cmd: TaskCmd) -> Result<()> {
             db.cambiar_prioridad(task, p)?;
             println!("[{task}] prioridad {}", p.etiqueta());
         }
+
+        TaskCmd::Edit(args) => {
+            if let Some(d) = &args.due {
+                validar_fecha(d)?;
+            }
+            let cambios = CambiosTarea {
+                title: args.title,
+                notes: args.notes.map(Some),
+                due_date: if args.clear_due { Some(None) } else { args.due.map(Some) },
+                estimate_pomodoros: if args.clear_estimate {
+                    Some(None)
+                } else {
+                    args.estimate.map(Some)
+                },
+                vault_note: None,
+            };
+            if cambios.vacio() {
+                anyhow::bail!("no me dijiste qué cambiar (--title, --due, --estimate, --notes)");
+            }
+            db.editar_tarea(args.task, &cambios)?;
+
+            let t = db.tarea(args.task)?;
+            println!("[{}] {}", t.id, t.title);
+            println!("  entrega    : {}", t.due_date.as_deref().unwrap_or("—"));
+            match t.estimate_pomodoros {
+                Some(e) => println!("  estimación : {e} pomodoros"),
+                None => println!("  estimación : —"),
+            }
+            if let Some(aviso) =
+                revisar_estimacion(t.estimate_pomodoros, cfg.pomodoro.max_pomodoros_per_task)
+            {
+                println!("{}", texto_aviso(aviso));
+            }
+        }
+
+        TaskCmd::Move { task, project } => {
+            let destino = resolver_proyecto(db, &project)?;
+            db.mover_tarea(task, destino)?;
+            println!("[{task}] {} → {}", db.tarea(task)?.title, db.ruta_proyecto(destino)?);
+        }
+
+        TaskCmd::Rm { task, force } => {
+            let t = db.tarea(task)?;
+            let r = db.resumen_tarea(task)?;
+            db.borrar_tarea(task, force)?;
+            if r.pomodoros_completados > 0 || r.pomodoros_anulados > 0 {
+                println!(
+                    "Borrada: {} — con {} pomodoro(s) de historial",
+                    t.title,
+                    r.pomodoros_completados + r.pomodoros_anulados
+                );
+            } else {
+                println!("Borrada: {}", t.title);
+            }
+        }
     }
     Ok(())
+}
+
+fn texto_aviso(aviso: AvisoEstimacion) -> String {
+    match aviso {
+        AvisoEstimacion::DemasiadoGrande { estimados, max } => {
+            format!("Aviso: {estimados} pomodoros es más de {max}. Pártela en dos.")
+        }
+        AvisoEstimacion::DemasiadoChica => {
+            "Aviso: menos de un pomodoro. Júntala con otra pequeña.".to_string()
+        }
+    }
 }
 
 fn listar(db: &Db, args: ListArgs) -> Result<()> {

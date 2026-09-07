@@ -4,7 +4,9 @@
 use chrono::{DateTime, Duration, TimeZone, Utc};
 use coffe_core::db::Db;
 use coffe_core::db::projects::{NuevoProyecto, slugify};
-use coffe_core::db::tasks::{AvisoEstimacion, FiltroTareas, NuevaTarea, revisar_estimacion};
+use coffe_core::db::tasks::{
+    AvisoEstimacion, CambiosTarea, FiltroTareas, NuevaTarea, revisar_estimacion,
+};
 use coffe_core::error::CoffeError;
 use coffe_core::machine::{SessionEnd, TimerState};
 use coffe_core::model::{InterruptionKind, Priority, TaskState, VoidReason};
@@ -396,4 +398,191 @@ fn solo_las_pausas_deliberadas_cuentan_como_pausa() {
     let r = db.resumen_tarea(t).unwrap();
     assert_eq!(r.veces_aparcada, 1, "tres ciclos normales no son tres pausas");
     assert_eq!(r.segundos_en_tramos, 100 * 60);
+}
+
+// ---------------------------------------------------- administrar el arbol
+
+#[test]
+fn un_proyecto_se_renombra_y_su_slug_le_sigue() {
+    let db = Db::en_memoria().unwrap();
+    let p = proyecto(&db, None, "strapp");
+
+    db.renombrar_proyecto(p, "Strapp Studio").unwrap();
+
+    let leido = db.proyecto(p).unwrap();
+    assert_eq!(leido.name, "Strapp Studio");
+    assert_eq!(leido.slug, "strapp-studio", "el slug se rehace, no se queda viejo");
+}
+
+#[test]
+fn un_proyecto_se_mueve_de_padre_y_a_la_raiz() {
+    let db = Db::en_memoria().unwrap();
+    let strapp = proyecto(&db, None, "strapp");
+    let clientes = proyecto(&db, None, "clientes");
+    let luz = proyecto(&db, Some(strapp), "luz");
+
+    db.mover_proyecto(luz, Some(clientes)).unwrap();
+    assert_eq!(db.ruta_proyecto(luz).unwrap(), "clientes / luz");
+
+    db.mover_proyecto(luz, None).unwrap();
+    assert_eq!(db.ruta_proyecto(luz).unwrap(), "luz");
+}
+
+#[test]
+fn un_proyecto_no_puede_colgar_de_su_propio_descendiente() {
+    // Si esto pasara, el subarbol quedaria suelto: ni sale del arbol ni se
+    // puede volver a alcanzar desde la raiz. SQLite lo aceptaria tan contenta.
+    let db = Db::en_memoria().unwrap();
+    let personal = proyecto(&db, None, "personal");
+    let labs = proyecto(&db, Some(personal), "labs");
+    let video = proyecto(&db, Some(labs), "video");
+
+    for destino in [labs, video] {
+        let err = db.mover_proyecto(personal, Some(destino)).unwrap_err();
+        assert!(matches!(err, CoffeError::CicloEnElArbol { .. }), "salio {err:?}");
+    }
+    let err = db.mover_proyecto(personal, Some(personal)).unwrap_err();
+    assert!(matches!(err, CoffeError::CicloEnElArbol { .. }));
+
+    // Y el arbol sigue en pie.
+    assert_eq!(db.ruta_proyecto(video).unwrap(), "personal / labs / video");
+}
+
+#[test]
+fn archivar_un_padre_se_lleva_a_los_hijos() {
+    let db = Db::en_memoria().unwrap();
+    let clientes = proyecto(&db, None, "clientes");
+    let nutricore = proyecto(&db, Some(clientes), "nutricore");
+    let sub = proyecto(&db, Some(nutricore), "api");
+    let otro = proyecto(&db, None, "strapp");
+
+    assert_eq!(db.archivar_proyecto(clientes, true).unwrap(), 3);
+
+    assert!(db.proyecto(sub).unwrap().archived, "un arbol con agujeros no sirve");
+    assert!(!db.proyecto(otro).unwrap().archived);
+    assert_eq!(db.proyectos(false).unwrap().len(), 1);
+
+    db.archivar_proyecto(clientes, false).unwrap();
+    assert_eq!(db.proyectos(false).unwrap().len(), 4);
+}
+
+#[test]
+fn borrar_un_proyecto_con_cosas_dentro_se_niega() {
+    let db = Db::en_memoria().unwrap();
+    let clientes = proyecto(&db, None, "clientes");
+    let nutricore = proyecto(&db, Some(clientes), "nutricore");
+    tarea(&db, nutricore, "una tarea");
+
+    let err = db.borrar_proyecto(clientes, false).unwrap_err();
+    assert!(
+        matches!(err, CoffeError::ProyectoConContenido { hijos: 1, tareas: 1, .. }),
+        "salio {err:?}"
+    );
+    assert!(db.proyecto(clientes).is_ok(), "y no se borro nada");
+}
+
+#[test]
+fn un_proyecto_vacio_se_borra_sin_ceremonia() {
+    let db = Db::en_memoria().unwrap();
+    let p = proyecto(&db, None, "equivocado");
+
+    db.borrar_proyecto(p, false).unwrap();
+
+    assert!(db.proyecto(p).is_err());
+}
+
+#[test]
+fn con_force_el_borrado_se_lleva_el_subarbol_entero() {
+    let db = Db::en_memoria().unwrap();
+    let clientes = proyecto(&db, None, "clientes");
+    let nutricore = proyecto(&db, Some(clientes), "nutricore");
+    let t = tarea(&db, nutricore, "una tarea");
+
+    db.borrar_proyecto(clientes, true).unwrap();
+
+    assert!(db.proyecto(nutricore).is_err(), "la cascada del esquema hace el resto");
+    assert!(db.tarea(t).is_err());
+}
+
+#[test]
+fn el_repo_de_un_proyecto_se_pone_y_se_quita() {
+    let db = Db::en_memoria().unwrap();
+    let p = proyecto(&db, None, "coffe");
+
+    db.fijar_repo(p, Some("/home/e/develop/personal/coffe")).unwrap();
+    assert!(db.proyecto_por_ruta("/home/e/develop/personal/coffe/src").unwrap().is_some());
+
+    db.fijar_repo(p, None).unwrap();
+    assert!(db.proyecto_por_ruta("/home/e/develop/personal/coffe/src").unwrap().is_none());
+}
+
+// ---------------------------------------------------- administrar tareas
+
+#[test]
+fn editar_una_tarea_solo_toca_lo_que_se_le_pide() {
+    let db = Db::en_memoria().unwrap();
+    let p = proyecto(&db, None, "strapp");
+    let t = tarea(&db, p, "titulo viejo");
+    db.editar_tarea(
+        t,
+        &CambiosTarea { due_date: Some(Some("2026-09-11".into())), ..Default::default() },
+    )
+    .unwrap();
+
+    db.editar_tarea(t, &CambiosTarea { title: Some("titulo nuevo".into()), ..Default::default() })
+        .unwrap();
+
+    let leida = db.tarea(t).unwrap();
+    assert_eq!(leida.title, "titulo nuevo");
+    assert_eq!(leida.due_date.as_deref(), Some("2026-09-11"), "la fecha no se perdio");
+    assert_eq!(leida.estimate_pomodoros, Some(2), "ni la estimacion");
+}
+
+#[test]
+fn una_fecha_de_entrega_se_puede_quitar() {
+    // `Some(None)` borra y `None` no toca: sin esa distincion no habria forma
+    // de dejar una tarea sin fecha una vez puesta.
+    let db = Db::en_memoria().unwrap();
+    let p = proyecto(&db, None, "strapp");
+    let t = tarea(&db, p, "x");
+    db.editar_tarea(
+        t,
+        &CambiosTarea { due_date: Some(Some("2026-09-11".into())), ..Default::default() },
+    )
+    .unwrap();
+
+    db.editar_tarea(t, &CambiosTarea { due_date: Some(None), ..Default::default() }).unwrap();
+
+    assert_eq!(db.tarea(t).unwrap().due_date, None);
+}
+
+#[test]
+fn una_tarea_se_muda_de_proyecto() {
+    let db = Db::en_memoria().unwrap();
+    let a = proyecto(&db, None, "strapp");
+    let b = proyecto(&db, None, "clientes");
+    let t = tarea(&db, a, "se equivoco de sitio");
+
+    db.mover_tarea(t, b).unwrap();
+
+    assert_eq!(db.tarea(t).unwrap().project_id, b);
+    assert!(db.mover_tarea(t, 999).is_err(), "no a un proyecto que no existe");
+}
+
+#[test]
+fn borrar_una_tarea_con_tiempo_medido_se_niega() {
+    let db = Db::en_memoria().unwrap();
+    let p = proyecto(&db, None, "strapp");
+    let t = tarea(&db, p, "con historial");
+    db.abrir_pomodoro(t, t0(), 1500, true).unwrap();
+    db.completar_pomodoro(t0() + Duration::minutes(25)).unwrap();
+
+    let err = db.borrar_tarea(t, false).unwrap_err();
+    assert!(
+        matches!(err, CoffeError::TareaConHistorial { pomodoros: 1, .. }),
+        "el tiempo medido es lo unico que esto no puede reconstruir: {err:?}"
+    );
+
+    db.borrar_tarea(t, true).unwrap();
+    assert!(db.tarea(t).is_err());
 }

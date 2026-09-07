@@ -72,8 +72,10 @@ una tarea.
       arrancar si había un foco vivo
 - [x] Comandos: `start`, `pause`, `resume`, `void`, `done`, `switch`, `status`,
       `interrupt`, `skip-break`, `trash`
-- [x] Gestión de proyectos y tareas por CLI: `project add|list`,
-      `task add|list|show|priority`, con proyectos por ruta (`strapp/tl-mas`)
+- [x] Gestión de proyectos y tareas por CLI, con proyectos por ruta
+      (`strapp/tl-mas`): `project add|list|rename|move|repo|archive|restore|rm`
+      y `task add|list|show|edit|move|priority|rm`. El árbol se administra
+      entero desde la terminal — nada de estructuras cableadas.
 - [x] Unidad de systemd de usuario para el daemon
 
 ---

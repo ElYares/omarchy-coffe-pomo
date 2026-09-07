@@ -31,7 +31,11 @@ usa a diario —la taza vive en waybar con su cuenta atrás— y falta la ventan
 ```bash
 coffe project add strapp
 coffe project add tl-mas --parent strapp
+coffe project move tl-mas --parent clientes   # el árbol se reorganiza cuando cambia el trabajo
+coffe project repo tl-mas ~/develop/work/tl-mas
+
 coffe task add "integración de facturación" -p strapp/tl-mas -P alta -d 2026-09-11 -e 4
+coffe task edit 1 --due 2026-09-15
 
 coffe start 1        # arranca el pomodoro
 coffe interrupt -e   # apunta que te interrumpieron, sin cortar nada

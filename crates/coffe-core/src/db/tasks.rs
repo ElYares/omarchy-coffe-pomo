@@ -271,3 +271,93 @@ impl Db {
             .transpose()
     }
 }
+
+/// Los cambios que una tarea admite después de creada. Cada `None` deja el
+/// campo como estaba; `Some(None)` lo borra. Sin esa distinción no habría
+/// forma de quitar una fecha de entrega.
+#[derive(Debug, Clone, Default)]
+pub struct CambiosTarea {
+    pub title: Option<String>,
+    pub notes: Option<Option<String>>,
+    pub due_date: Option<Option<String>>,
+    pub estimate_pomodoros: Option<Option<u32>>,
+    pub vault_note: Option<Option<String>>,
+}
+
+impl CambiosTarea {
+    pub fn vacio(&self) -> bool {
+        self.title.is_none()
+            && self.notes.is_none()
+            && self.due_date.is_none()
+            && self.estimate_pomodoros.is_none()
+            && self.vault_note.is_none()
+    }
+}
+
+/// Administración de tareas: editar, mover de proyecto y borrar.
+impl Db {
+    pub fn editar_tarea(&self, id: i64, cambios: &CambiosTarea) -> Result<(), CoffeError> {
+        self.tarea(id)?;
+        if cambios.vacio() {
+            return Ok(());
+        }
+
+        // Se arma con solo los campos pedidos para no pisar con NULL lo que el
+        // usuario no menciono.
+        let mut trozos: Vec<&str> = Vec::new();
+        let mut vals: Vec<Box<dyn rusqlite::ToSql>> = Vec::new();
+
+        if let Some(v) = &cambios.title {
+            trozos.push("title = ?");
+            vals.push(Box::new(v.clone()));
+        }
+        if let Some(v) = &cambios.notes {
+            trozos.push("notes = ?");
+            vals.push(Box::new(v.clone()));
+        }
+        if let Some(v) = &cambios.due_date {
+            trozos.push("due_date = ?");
+            vals.push(Box::new(v.clone()));
+        }
+        if let Some(v) = &cambios.estimate_pomodoros {
+            trozos.push("estimate_pomodoros = ?");
+            vals.push(Box::new(*v));
+        }
+        if let Some(v) = &cambios.vault_note {
+            trozos.push("vault_note = ?");
+            vals.push(Box::new(v.clone()));
+        }
+
+        vals.push(Box::new(id));
+        let sql = format!("UPDATE tasks SET {} WHERE id = ?", trozos.join(", "));
+        let refs: Vec<&dyn rusqlite::ToSql> = vals.iter().map(|b| b.as_ref()).collect();
+        self.conn.execute(&sql, refs.as_slice())?;
+        Ok(())
+    }
+
+    pub fn mover_tarea(&self, id: i64, project_id: i64) -> Result<(), CoffeError> {
+        self.tarea(id)?;
+        self.proyecto(project_id)?;
+        self.conn
+            .execute("UPDATE tasks SET project_id = ?2 WHERE id = ?1", params![id, project_id])?;
+        Ok(())
+    }
+
+    /// Borra la tarea. Sin `force` se niega si tiene pomodoros: el esquema
+    /// borra en cascada y con ellos se va el tiempo medido, que es lo único
+    /// que esta aplicación no puede reconstruir.
+    pub fn borrar_tarea(&self, id: i64, force: bool) -> Result<(), CoffeError> {
+        self.tarea(id)?;
+        let pomodoros: u32 = self.conn.query_row(
+            "SELECT COUNT(*) FROM pomodoros WHERE task_id = ?1",
+            params![id],
+            |f| f.get(0),
+        )?;
+
+        if !force && pomodoros > 0 {
+            return Err(CoffeError::TareaConHistorial { id, pomodoros });
+        }
+        self.conn.execute("DELETE FROM tasks WHERE id = ?1", params![id])?;
+        Ok(())
+    }
+}

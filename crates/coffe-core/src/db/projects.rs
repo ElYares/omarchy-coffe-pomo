@@ -106,14 +106,6 @@ impl Db {
         )?;
         stmt.query_row(params![cwd], fila_a_proyecto).optional()?.transpose()
     }
-
-    pub fn archivar_proyecto(&self, id: i64) -> Result<(), CoffeError> {
-        let n = self.conn.execute("UPDATE projects SET archived = 1 WHERE id = ?1", params![id])?;
-        if n == 0 {
-            return Err(CoffeError::NoExiste { que: "proyecto", id });
-        }
-        Ok(())
-    }
 }
 
 fn fila_a_proyecto(f: &Row<'_>) -> rusqlite::Result<Result<Project, CoffeError>> {
@@ -161,4 +153,110 @@ pub fn slugify(s: &str) -> String {
     }
 
     out
+}
+
+/// Administración del árbol. Lo que hace falta para que un proyecto no sea
+/// algo que se crea una vez y ya no se puede tocar.
+impl Db {
+    pub fn renombrar_proyecto(&self, id: i64, nombre: &str) -> Result<(), CoffeError> {
+        let n = self.conn.execute(
+            "UPDATE projects SET name = ?2, slug = ?3 WHERE id = ?1",
+            params![id, nombre, slugify(nombre)],
+        )?;
+        if n == 0 {
+            return Err(CoffeError::NoExiste { que: "proyecto", id });
+        }
+        Ok(())
+    }
+
+    /// Lo cuelga de otro padre, o de la raíz con `None`.
+    pub fn mover_proyecto(&self, id: i64, nuevo_padre: Option<i64>) -> Result<(), CoffeError> {
+        self.proyecto(id)?;
+
+        if let Some(destino) = nuevo_padre {
+            self.proyecto(destino)?;
+            // Colgar un proyecto de su propio descendiente dejaria el subarbol
+            // suelto: ni sale del arbol ni se puede volver a alcanzar. La base
+            // lo aceptaria tan contenta, asi que la regla vive aqui.
+            if destino == id || self.descendientes(id)?.contains(&destino) {
+                return Err(CoffeError::CicloEnElArbol { id, destino });
+            }
+        }
+
+        self.conn.execute(
+            "UPDATE projects SET parent_id = ?2 WHERE id = ?1",
+            params![id, nuevo_padre],
+        )?;
+        Ok(())
+    }
+
+    /// La carpeta del repo, o `None` para quitarla.
+    pub fn fijar_repo(&self, id: i64, repo: Option<&str>) -> Result<(), CoffeError> {
+        let n = self
+            .conn
+            .execute("UPDATE projects SET repo_path = ?2 WHERE id = ?1", params![id, repo])?;
+        if n == 0 {
+            return Err(CoffeError::NoExiste { que: "proyecto", id });
+        }
+        Ok(())
+    }
+
+    /// Todos los ids que cuelgan de este, a cualquier profundidad.
+    pub fn descendientes(&self, id: i64) -> Result<Vec<i64>, CoffeError> {
+        let mut stmt = self.conn.prepare(
+            "WITH RECURSIVE bajada(id) AS (
+                 SELECT id FROM projects WHERE parent_id = ?1
+                 UNION ALL
+                 SELECT p.id FROM projects p JOIN bajada b ON p.parent_id = b.id
+             )
+             SELECT id FROM bajada",
+        )?;
+        let filas = stmt.query_map(params![id], |f| f.get(0))?;
+        Ok(filas.collect::<Result<_, _>>()?)
+    }
+
+    /// Cuántos subproyectos y cuántas tareas cuelgan de él. Es lo que se mira
+    /// antes de dejar borrar.
+    pub fn contenido_proyecto(&self, id: i64) -> Result<(u32, u32), CoffeError> {
+        let hijos = self.descendientes(id)?;
+        let mut ids = hijos.clone();
+        ids.push(id);
+
+        let marcas = vec!["?"; ids.len()].join(",");
+        let sql = format!("SELECT COUNT(*) FROM tasks WHERE project_id IN ({marcas})");
+        let refs: Vec<&dyn rusqlite::ToSql> =
+            ids.iter().map(|i| i as &dyn rusqlite::ToSql).collect();
+        let tareas: u32 = self.conn.query_row(&sql, refs.as_slice(), |f| f.get(0))?;
+
+        Ok((hijos.len() as u32, tareas))
+    }
+
+    /// Archiva el proyecto **y todo lo que cuelgue de él**: archivar un padre
+    /// dejando visibles a los hijos sería un árbol con agujeros.
+    pub fn archivar_proyecto(&self, id: i64, archivado: bool) -> Result<u32, CoffeError> {
+        self.proyecto(id)?;
+        let mut ids = self.descendientes(id)?;
+        ids.push(id);
+
+        let marcas = vec!["?"; ids.len()].join(",");
+        let sql = format!("UPDATE projects SET archived = ?1 WHERE id IN ({marcas})");
+        let mut vals: Vec<&dyn rusqlite::ToSql> = vec![&archivado];
+        vals.extend(ids.iter().map(|i| i as &dyn rusqlite::ToSql));
+
+        Ok(self.conn.execute(&sql, vals.as_slice())? as u32)
+    }
+
+    /// Borra de verdad. Sin `force` se niega si hay algo dentro, porque el
+    /// esquema borra en cascada: un `rm` distraído se lleva el historial de
+    /// tiempo de todas las tareas que colgaran del proyecto.
+    pub fn borrar_proyecto(&self, id: i64, force: bool) -> Result<(), CoffeError> {
+        self.proyecto(id)?;
+        let (hijos, tareas) = self.contenido_proyecto(id)?;
+
+        if !force && (hijos > 0 || tareas > 0) {
+            return Err(CoffeError::ProyectoConContenido { id, hijos, tareas });
+        }
+        self.conn.execute("DELETE FROM projects WHERE id = ?1", params![id])?;
+        Ok(())
+    }
 }

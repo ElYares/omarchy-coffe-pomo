@@ -109,7 +109,43 @@ enum ProjectCmd {
         repo: Option<String>,
     },
     /// El árbol entero.
-    List,
+    List {
+        /// Incluye los archivados.
+        #[arg(long, short)]
+        all: bool,
+    },
+    /// Le cambia el nombre. El slug se rehace solo.
+    Rename { proyecto: String, nombre: String },
+    /// Lo cuelga de otro padre, o de la raíz.
+    Move {
+        proyecto: String,
+        /// El nuevo padre: id o ruta.
+        #[arg(long, conflicts_with = "root")]
+        parent: Option<String>,
+        /// Lo sube a la raíz del árbol.
+        #[arg(long)]
+        root: bool,
+    },
+    /// Fija (o quita) la carpeta del repo, con la que se reconoce el proyecto
+    /// por el directorio de trabajo.
+    Repo {
+        proyecto: String,
+        ruta: Option<String>,
+        /// Se la quita.
+        #[arg(long, conflicts_with = "ruta")]
+        clear: bool,
+    },
+    /// Lo aparta de la vista, con todo lo que cuelgue de él.
+    Archive { proyecto: String },
+    /// Lo devuelve a la vista.
+    Restore { proyecto: String },
+    /// Lo borra de verdad. Con cosas dentro hace falta `--force`, y eso se
+    /// lleva por delante el historial de tiempo de sus tareas.
+    Rm {
+        proyecto: String,
+        #[arg(long)]
+        force: bool,
+    },
 }
 
 #[derive(Subcommand)]
@@ -136,6 +172,40 @@ enum TaskCmd {
     Show { task: i64 },
     /// Cambia la prioridad. Solo si la tarea no ha arrancado.
     Priority { task: i64, priority: String },
+    /// Cambia título, fecha de entrega, estimación o notas.
+    Edit(EditArgs),
+    /// La muda a otro proyecto.
+    Move {
+        task: i64,
+        #[arg(long, short)]
+        project: String,
+    },
+    /// La borra. Con tiempo medido encima hace falta `--force`.
+    Rm {
+        task: i64,
+        #[arg(long)]
+        force: bool,
+    },
+}
+
+#[derive(Args)]
+struct EditArgs {
+    pub task: i64,
+    #[arg(long, short)]
+    title: Option<String>,
+    /// Fecha de entrega, `AAAA-MM-DD`.
+    #[arg(long, short, conflicts_with = "clear_due")]
+    due: Option<String>,
+    /// Se queda sin fecha de entrega.
+    #[arg(long)]
+    clear_due: bool,
+    #[arg(long, short, conflicts_with = "clear_estimate")]
+    estimate: Option<u32>,
+    /// Se queda sin estimación.
+    #[arg(long)]
+    clear_estimate: bool,
+    #[arg(long, short)]
+    notes: Option<String>,
 }
 
 #[derive(Args)]
