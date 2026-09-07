@@ -31,7 +31,9 @@ la dibuja entera: se vacía en el pomodoro, se recarga en el descanso, entra al
 refri cuando aparcas y se queda fría cuando un pomodoro se anula. El tablero
 tiene sus cuatro columnas, arrastrar y soltar, y un bote que se vacía al
 archivo. Y el calendario no solo dice cuándo vence cada cosa: dice si cabe.
-Falta el vault y los hooks de Claude (Fase 7) y los reportes (Fase 8).
+Las tareas se traen del vault de Obsidian y los hooks de Claude Code miden
+cuánto del trabajo se hizo con Claude. Faltan los reportes y el instalador
+(Fase 8).
 
 ```bash
 coffe project add strapp
@@ -48,6 +50,10 @@ coffe pause          # al refri: anula el pomodoro, guarda la tarea
 coffe resume         # saca del refri lo último que guardaste
 coffe status
 coffe task show 1    # efectivo, dedicación y calendario, uno debajo de otro
+
+coffe vault scan     # qué proyectos del vault tienen backlog
+coffe project vault strapp/tl-mas tl-mas-server
+coffe vault import   # trae los HU pendientes al tablero, sin duplicar
 ```
 
 En la barra queda así, con la cuenta atrás moviéndose:

@@ -183,16 +183,30 @@ esos días ya no queda capacidad.
 
 ---
 
-## [ ] Fase 7 — Vault y Claude
+## [x] Fase 7 — Vault y Claude
 
 **Entrega**: las tareas llegan de donde ya las escribes, y el tiempo se cierra
 solo.
 
-- [ ] Importador de `10 Projects/<proy>/Backlog/HU-XXX.md` del vault
-- [ ] Enlace de vuelta a la nota desde la tarjeta
-- [ ] Detección de proyecto por `cwd` usando `repo_path`
-- [ ] Hook de Claude Code en `Stop` que cierra el tramo de la tarea
-- [ ] Marca de qué parte del trabajo se hizo con Claude
+Hecha, y probada contra el vault real: 124 notas, de las que entraron las 11 que
+son trabajo pendiente de los tres proyectos de strapp.
+
+**El vault manda sobre QUÉ hay que hacer; coffe manda sobre el tiempo.** El
+importador solo lee: no escribe una línea en el vault ni intenta sincronizar en
+dos direcciones. Y lo que el vault nunca toca es el estado de una tarea ni su
+prioridad si ya se trabajó.
+
+- [x] Importador de `10 Projects/<proy>/Backlog/HU-XXX.md` del vault,
+      idempotente y tolerante: el formato real tiene diez estados distintos y
+      una de cada cuatro notas no trae prioridad. Lo que no reconoce entra como
+      pendiente **y se dice en voz alta**
+- [x] Enlace de vuelta a la nota desde la tarjeta
+- [x] Detección de proyecto por `cwd` usando `repo_path`
+- [x] Hook de Claude Code en `Stop` que cierra el tramo de la tarea
+- [x] Marca de qué parte del trabajo se hizo con Claude, **medida** por los
+      hooks y no estimada. Si el pomodoro corre sobre otro proyecto que el del
+      directorio, no se apunta: sería mentir en el reporte que existe para poder
+      leerse
 
 ---
 

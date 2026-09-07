@@ -60,6 +60,31 @@ Los nombres de color del css son los de Nordfjell y Emberwood. Un tema con otro
 vocabulario necesita los suyos; lo unico garantizado en todos es lo que define
 `~/.config/omarchy/current/theme/waybar.css`.
 
+## El vault de Obsidian
+
+```toml
+[vault]
+path = "~/develop/docs/mi-vault"
+projects_dir = "10 Projects"
+```
+
+```bash
+coffe vault scan                                  # que hay y a que apunta
+coffe project vault strapp/tl-mas tl-mas-server   # ligar, uno a uno
+coffe vault import --dry-run                      # ver antes de escribir
+coffe vault import
+```
+
+Se liga a mano porque los nombres no coinciden: `tl-mas-server` en el vault es
+`strapp/tl-mas` aqui. `scan` propone, pero no decide.
+
+El importador **solo lee**. No escribe una linea en el vault, y lo que el vault
+nunca toca es el estado de una tarea ni su prioridad si ya se trabajo.
+
+## Los hooks de Claude
+
+Ver [`claude/README.md`](claude/README.md).
+
 ## Rutas
 
 El daemon guarda todo en `~/.local/share/coffe/coffe.db` y escucha en
