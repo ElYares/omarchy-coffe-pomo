@@ -3,6 +3,7 @@
 //! Nada de aquí abre sockets ni pinta ventanas. El daemon, la CLI y la app son
 //! clientes de este crate.
 
+pub mod agenda;
 pub mod config;
 pub mod db;
 pub mod error;

@@ -8,6 +8,7 @@ use std::path::Path;
 #[serde(default, deny_unknown_fields)]
 pub struct Config {
     pub pomodoro: Pomodoro,
+    pub agenda: Agenda,
     pub vault: Vault,
 }
 
@@ -24,6 +25,19 @@ pub struct Pomodoro {
     pub strict: bool,
     /// Cirillo: una tarea de más de 7 pomodoros hay que partirla.
     pub max_pomodoros_per_task: u32,
+}
+
+/// Con qué se compara la carga de un día.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct Agenda {
+    /// Cuántos pomodoros caben en un día de trabajo. Cirillo habla de ocho a
+    /// doce; ocho son cuatro horas de foco, que ya es un día honesto.
+    pub pomodoros_por_dia: u32,
+    /// Si el sábado y el domingo cuentan como días de trabajo. Por defecto no:
+    /// una agenda que da por hecho que trabajas el fin de semana esconde
+    /// justo el problema que debería enseñar.
+    pub fines_de_semana: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -45,6 +59,12 @@ impl Default for Pomodoro {
             strict: true,
             max_pomodoros_per_task: 7,
         }
+    }
+}
+
+impl Default for Agenda {
+    fn default() -> Self {
+        Self { pomodoros_por_dia: 8, fines_de_semana: false }
     }
 }
 
