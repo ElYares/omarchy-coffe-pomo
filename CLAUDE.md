@@ -73,6 +73,13 @@ La ventana en desarrollo son **dos procesos**: `cd app && pnpm dev` levanta Vite
 en el 1420 y `cargo run -p coffe-app` abre contra él. En depuración Tauri usa
 `devUrl`, no `dist`: sin Vite la ventana abre con "Connection refused".
 
+**Para release: `cd app && pnpm tauri build --no-bundle`, nunca `cargo build
+--release -p coffe-app`.** El CLI de Tauri activa la feature que sirve los
+assets embebidos; con cargo a secas el binario de release sigue apuntando a
+`devUrl`. Compila, enlaza y arranca sin quejarse: el fallo solo se ve al abrir
+la ventana, y es fácil confundirlo con una instancia de desarrollo que quedó
+viva.
+
 **Tauri v2 exige `capabilities/default.json`.** Sin `core:event:allow-listen`
 la ventana arranca, pinta y responde a `invoke`, pero no recibe un solo evento:
 se queda congelada en el primer estado, sin error visible. El aviso solo sale

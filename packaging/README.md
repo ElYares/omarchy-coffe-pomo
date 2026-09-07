@@ -20,8 +20,7 @@ journalctl --user -u coffe -f
 ## La ventana
 
 ```bash
-cd app && pnpm install && pnpm build && cd ..
-cargo build --release -p coffe-app
+cd app && pnpm install && pnpm tauri build --no-bundle && cd ..
 install -Dm755 target/release/coffe-app ~/.local/bin/coffe-app
 
 # La regla de ventana (flotante y centrada):
@@ -29,10 +28,14 @@ install -Dm755 target/release/coffe-app ~/.local/bin/coffe-app
 # y anadir su `source` en ~/.config/hypr/hyprland.conf
 ```
 
+**Tiene que ser `pnpm tauri build`, no `cargo build --release`.** El CLI de
+Tauri activa la feature que hace que la ventana sirva los assets embebidos;
+compilando solo con cargo, el binario de release sigue apuntando a `devUrl` y
+abre con "Connection refused" aunque no haya ningun Vite a la vista. Es un
+fallo silencioso: compila, enlaza y arranca, y solo se ve al abrir la ventana.
+
 En desarrollo son dos procesos: `cd app && pnpm dev` levanta Vite en el 1420, y
-`cargo run -p coffe-app` abre la ventana contra ese servidor. En una compilacion
-de depuracion Tauri usa `devUrl`, no `dist`: sin Vite corriendo la ventana abre
-con "Connection refused".
+`cargo run -p coffe-app` abre la ventana contra ese servidor.
 
 ## La barra y los atajos
 
