@@ -313,3 +313,19 @@ fn una_interrupcion_queda_colgada_de_su_pomodoro() {
     assert!(svc.db().pomodoro_abierto().unwrap().is_some());
     let _ = VoidReason::Abandoned;
 }
+
+#[test]
+fn arrancar_sobre_una_tarea_que_no_existe_no_deja_el_reloj_a_medias() {
+    let (db, _) = base();
+    let mut svc = servicio(db, cfg(), t0());
+
+    // El numero 99 podria ser el id de un proyecto tecleado por error.
+    let err = svc.start(99, t0()).unwrap_err();
+
+    assert!(
+        matches!(err, coffe_core::CoffeError::NoExiste { que: "tarea", id: 99 }),
+        "tiene que decir que no existe la tarea, no fallar contra la clave foránea: {err:?}"
+    );
+    assert!(svc.state().is_idle(), "y el reloj no puede quedar corriendo en el aire");
+    assert!(svc.db().pomodoro_abierto().unwrap().is_none());
+}

@@ -73,6 +73,14 @@ impl Service {
         cmd: Command,
         now: DateTime<Utc>,
     ) -> Result<Vec<Effect>, CoffeError> {
+        // Una tarea que no existe se rechaza ANTES de tocar la máquina. Si se
+        // deja pasar, el reloj arranca en memoria y la escritura muere contra
+        // la clave foránea: el usuario ve "FOREIGN KEY constraint failed" y el
+        // estado queda con un foco abierto que no tiene pomodoro detrás.
+        if let Command::Start { task_id } | Command::Switch { task_id } = cmd {
+            self.db.tarea(task_id)?;
+        }
+
         let fx = self.machine.apply(cmd, now)?;
 
         for efecto in &fx {
