@@ -1,0 +1,37 @@
+/* Pega esto en ~/.config/waybar/style.css. Ademas hay que anadir
+   #custom-coffe a la lista de modulos base (padding y radio) y a la de
+   :hover, o el modulo saldra sin margenes y sin realce al pasar por
+   encima.
+
+   Los nombres de color son los del tema Nordfjell/Emberwood. Un tema con
+   otro vocabulario --midnight-statusline, windows-xp-- necesita los
+   suyos: lo unico garantizado en todos es lo que define
+   ~/.config/omarchy/current/theme/waybar.css. */
+
+/* coffe: el pomodoro. El estado va por color y no por icono porque el icono
+   --la taza-- es la identidad del modulo: cambiarlo por un reloj o un pausa
+   obligaria a leerlo, y esto se mira de reojo.
+
+   `focus` se queda en la tinta base a proposito. Es el estado que esta
+   encendido veinticinco minutos de cada treinta, y el acento puesto ahi
+   cansaria igual que cansaba el naranja: el pomodoro corriendo es lo NORMAL,
+   no una alarma.
+
+   El unico que se lleva el acento es `overlearning` --la tarea ya esta hecha
+   pero el reloj sigue, porque el metodo dice que si un pomodoro empieza tiene
+   que sonar--. Es raro, es temporal y conviene enterarse. */
+#custom-coffe              { color: @ink; }
+#custom-coffe.idle         { color: @ink_dim; }
+#custom-coffe.break,
+#custom-coffe.break-long   { color: @moss; }
+#custom-coffe.overlearning { color: @hueso; }
+
+/* Sin daemon el texto va vacio y el modulo tendria que desaparecer, pero el
+   padding deja un hueco que parece un fallo de render --el mismo caso que
+   custom-weather.unavailable--. */
+#custom-coffe.off {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: none;
+}

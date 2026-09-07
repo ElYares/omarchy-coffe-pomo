@@ -5,16 +5,17 @@ Documentation=https://github.com/elyares/omarchy-coffe-pomo
 # antes de que exista la sesión gráfica, y muere con ella.
 After=graphical-session.target
 PartOf=graphical-session.target
+# Sin esto, un fallo repetido al arrancar (por ejemplo un socket que no se
+# puede crear) reintentaria para siempre a dos segundos. Van en [Unit]: en
+# [Service] systemd las ignora con un aviso.
+StartLimitBurst=5
+StartLimitIntervalSec=60
 
 [Service]
 Type=simple
 ExecStart=%h/.local/bin/coffe daemon
 Restart=on-failure
 RestartSec=2
-# Sin esto, un fallo repetido al arrancar (por ejemplo un socket que no se
-# puede crear) reintentaría para siempre a dos segundos.
-StartLimitBurst=5
-StartLimitIntervalSec=60
 
 [Install]
 WantedBy=default.target

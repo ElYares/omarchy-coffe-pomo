@@ -78,20 +78,33 @@ una tarea.
 
 ---
 
-## [ ] Fase 3 — Waybar
+## [x] Fase 3 — Waybar
 
 El pomodoro usable a diario sin abrir ninguna ventana.
 
 **Entrega**: el módulo en la barra, con clics y avisos.
 
-- [ ] `coffe bar`: JSON con `text`, `tooltip`, `class` por estado
-- [ ] Señal **RTMIN+15** desde el daemon en cada transición
-- [ ] Módulo `custom/coffe` en `~/.config/waybar/config.jsonc`
+Hecho e instalado. El módulo **no lleva `interval`**: se queda suscrito al
+daemon y recibe una línea de JSON por segundo, así que la cuenta atrás se mueve
+sin arrancar 86.400 procesos al día. Con el daemon apagado imprime texto vacío
+—el módulo se esconde solo— y sale; waybar lo relanza.
+
+Queda puesto en `config.jsonc` y `config.nordfjell.jsonc` (más sus `style`).
+**Los otros cuatro temas no lo tienen**: `midnight-statusline` y `windows-xp`
+usan otro vocabulario de colores y hay que elegirles el suyo.
+
+- [x] `coffe bar`: JSON con `text`, `tooltip`, `class` por estado
+- [x] Señal **RTMIN+15** desde el daemon en cada transición
+- [x] Módulo `custom/coffe` en `~/.config/waybar/config.jsonc`
       (con respaldo previo del archivo)
-- [ ] Estilos por clase en `style.css`, tomando color del tema
-- [ ] Clics: izquierdo abre la app, derecho aparca, medio anula
-- [ ] Avisos por mako al sonar y al terminar el descanso
-- [ ] Atajo de Hyprland para iniciar y parar
+- [x] Los bloques instalados, copiados a `packaging/` para que el repo y la
+      máquina no se separen
+- [x] Estilos por clase en `style.css`, tomando color del tema
+- [x] Clics: derecho aparca, medio anula. El izquierdo saca del refri lo
+      último guardado — pasa a abrir la ventana en la Fase 4
+- [x] Avisos por mako al sonar y al terminar el descanso
+- [x] Atajos de Hyprland: `SUPER ALT + P` alterna arrancar y refri,
+      `SUPER SHIFT ALT + P` apunta una interrupción externa
 
 ---
 

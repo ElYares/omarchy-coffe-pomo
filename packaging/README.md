@@ -17,6 +17,31 @@ coffe status
 journalctl --user -u coffe -f
 ```
 
+## La barra y los atajos
+
+```bash
+# El modulo de waybar: pegar el bloque en la config y los estilos en el css.
+#   waybar/module.jsonc  -> ~/.config/waybar/config.jsonc
+#   waybar/style.css     -> ~/.config/waybar/style.css
+# Y nombrar "custom/coffe" en la lista de modulos que corresponda.
+omarchy restart waybar
+
+# Los atajos:
+#   hypr/bindings.conf   -> ~/.config/hypr/bindings.conf
+hyprctl reload && hyprctl configerrors
+```
+
+Omarchy conmuta la barra por tema: el hook `theme-set` copia
+`config.<tema>.jsonc` y `style.<tema>.css` sobre los activos. O sea que el
+modulo hay que ponerlo tambien en la variante del tema que se use, o
+desaparecera al cambiar de tema y volver.
+
+Los nombres de color del css son los de Nordfjell y Emberwood. Un tema con otro
+vocabulario necesita los suyos; lo unico garantizado en todos es lo que define
+`~/.config/omarchy/current/theme/waybar.css`.
+
+## Rutas
+
 El daemon guarda todo en `~/.local/share/coffe/coffe.db` y escucha en
 `$XDG_RUNTIME_DIR/coffe.sock`. Para probar sin tocar tus datos reales, apunta
 `XDG_DATA_HOME`, `XDG_CONFIG_HOME` y `XDG_RUNTIME_DIR` a otro sitio — pero deja

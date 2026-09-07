@@ -1,0 +1,33 @@
+// Pega esto dentro de ~/.config/waybar/config.jsonc, y nombra
+// "custom/coffe" en la lista de modulos donde lo quieras.
+
+// El pomodoro de coffe. NO lleva `interval`: el script se queda SUSCRITO al
+  // daemon por el socket y escupe una linea de JSON por segundo mientras el
+  // reloj corre, asi que la cuenta atras se mueve sin arrancar un proceso cada
+  // segundo. Con `interval: 1` serian 86.400 procesos al dia para lo mismo.
+  //
+  // Cuando el daemon no esta, `coffe bar` imprime texto vacio --el modulo se
+  // esconde solo, sin dejar hueco-- y sale; `restart-interval` lo relanza hasta
+  // que el reloj vuelva.
+  //
+  // El daemon manda ademas RTMIN+15 en cada transicion. Aqui no se declara
+  // `signal` porque el modo suscrito no lo necesita: esa senal es el respaldo
+  // para quien prefiera `coffe bar` de un solo tiro con su propio `interval`.
+  // De la 7 a la 14 ya estan tomadas por otros modulos de esta barra.
+  //
+  // El reloj lo lleva `systemctl --user status coffe`, no waybar: cerrar la
+  // barra no puede parar un pomodoro.
+  "custom/coffe": {
+    "exec": "coffe bar --watch",
+    "return-type": "json",
+    "restart-interval": 5,
+    "tooltip": true,
+    // Izquierdo: saca del refri lo ultimo que guardaste. En la Fase 4 esto
+    // pasara a abrir la ventana con la taza.
+    "on-click": "coffe click resume",
+    // Derecho: al refri. Anula el pomodoro --el metodo no deja pausarlo-- pero
+    // la tarea conserva su tiempo acumulado.
+    "on-click-right": "coffe click pause",
+    // Medio: tira el pomodoro sin tocar la tarea.
+    "on-click-middle": "coffe click void"
+  },

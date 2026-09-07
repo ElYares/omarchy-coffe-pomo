@@ -24,9 +24,9 @@ tal. Las estadísticas no sirven de nada si mienten.
 
 En construcción. Ver [`docs/FASES.md`](docs/FASES.md).
 
-Hechas las fases 0 a 2: el dominio, la persistencia y el reloj. Ya se puede
-usar entero desde la terminal; falta que asome en waybar (Fase 3) y la ventana
-con la taza (Fase 4). 56 pruebas.
+Hechas las fases 0 a 3: el dominio, la persistencia, el reloj y la barra. Ya se
+usa a diario —la taza vive en waybar con su cuenta atrás— y falta la ventana
+(Fase 4). 57 pruebas.
 
 ```bash
 coffe project add strapp
@@ -40,6 +40,15 @@ coffe resume         # saca del refri lo último que guardaste
 coffe status
 coffe task show 1    # efectivo, dedicación y calendario, uno debajo de otro
 ```
+
+En la barra queda así, con la cuenta atrás moviéndose:
+
+```
+☕ 24:40   15% · 2h 00m   ⚡1  🏠1   <   LAN   VOL 70%   PWR 93%
+```
+
+Clic derecho manda la tarea al refri, el central tira el pomodoro. `SUPER ALT+P`
+alterna arrancar y aparcar sin soltar el teclado.
 
 Instalación en [`packaging/README.md`](packaging/README.md).
 
