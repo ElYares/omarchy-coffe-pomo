@@ -994,3 +994,55 @@ body {
   color: var(--tenue);
   font-size: 11px;
 }
+
+/* --- lo que la cuenta no puede contar ---------------------------------- */
+
+.veredicto--parcial {
+  color: var(--tinta);
+}
+
+/* Una cuenta incompleta no puede parecer completa. No es una alarma —no hay
+   nada roto— pero tampoco puede pasar desapercibida. */
+.veredicto__hueco {
+  color: var(--tenue);
+}
+
+/* --- estimador --------------------------------------------------------- */
+
+.estimador {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.estimador__rotulo {
+  color: var(--tenue);
+  font-size: 11px;
+}
+
+.estimador__botones {
+  display: flex;
+  gap: 4px;
+}
+
+.estimador__botones .chip {
+  flex: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.chip--puesta {
+  border-color: color-mix(in srgb, var(--acento) 55%, transparent);
+  color: var(--acento);
+}
+
+/* A partir de siete pomodoros el método dice que la tarea hay que partirla. */
+.chip--demasiado.chip--puesta {
+  border-color: var(--alta);
+  color: var(--alta);
+}
+
+.chip--tenue {
+  flex: 0 0 auto;
+  min-width: 26px;
+  opacity: 0.6;
+}

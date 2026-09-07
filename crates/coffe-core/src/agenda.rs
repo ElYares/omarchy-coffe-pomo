@@ -42,6 +42,29 @@ impl DiaAgenda {
     }
 }
 
+/// Lo que el plan no puede contar. Va aparte del plan a propósito: un total
+/// que se calla lo que ignora es peor que no tener total, porque se lee como si
+/// lo supiera todo.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Plan {
+    pub dias: Vec<DiaAgenda>,
+    /// Tareas con fecha de entrega y **sin estimación**: no pesan en ningún día
+    /// porque no hay número que sumar.
+    pub sin_estimar: u32,
+}
+
+impl Plan {
+    /// El primer día que ya no cabe, si lo hay.
+    pub fn primer_imposible(&self) -> Option<&DiaAgenda> {
+        self.dias.iter().find(|d| d.imposible)
+    }
+
+    /// Si la cuenta se puede leer como completa.
+    pub fn es_completa(&self) -> bool {
+        self.sin_estimar == 0
+    }
+}
+
 /// El plan desde hoy hasta `dias` días por delante.
 ///
 /// Lo que ya venció y sigue sin hacerse **no se reparte hacia atrás**: cae
@@ -94,4 +117,19 @@ fn es_laborable(fecha: NaiveDate, cfg: &Agenda) -> bool {
 /// "¿voy bien?".
 pub fn primer_dia_imposible(plan: &[DiaAgenda]) -> Option<&DiaAgenda> {
     plan.iter().find(|d| d.imposible)
+}
+
+/// El plan entero: los días y lo que no se pudo contar.
+///
+/// `sin_estimar` no es un detalle: con un backlog recién traído del vault, donde
+/// ninguna historia lleva estimación, el plan diría "todo cabe" ignorando todo
+/// el trabajo. Un veredicto que se calla lo que no sabe no es un veredicto.
+pub fn planificar_todo(
+    hoy: NaiveDate,
+    vencimientos: &[Vencimiento],
+    sin_estimar: u32,
+    dias: u32,
+    cfg: &Agenda,
+) -> Plan {
+    Plan { dias: planificar(hoy, vencimientos, dias, cfg), sin_estimar }
 }

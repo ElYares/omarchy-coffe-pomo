@@ -7,7 +7,7 @@
 mod tema;
 
 use anyhow::Result;
-use coffe_core::agenda::{DiaAgenda, Vencimiento, planificar};
+use coffe_core::agenda::{Plan, Vencimiento, planificar_todo};
 use coffe_core::config::Config;
 use coffe_core::db::projects::Project;
 use coffe_core::db::tasks::{CambiosTarea, FiltroTareas, NuevaTarea, Task};
@@ -287,6 +287,18 @@ fn cambiar_prioridad(estado: State<'_, Estado>, id: i64, priority: Priority) -> 
     db.cambiar_prioridad(id, priority).map_err(|e| e.to_string())
 }
 
+/// Pone o quita la estimación.
+///
+/// Va en su propio comando porque en JSON no hay forma de distinguir "no toques
+/// este campo" de "déjalo vacío": las dos cosas llegan como `null`. Aquí el
+/// parámetro siempre viene, así que `null` solo puede significar borrar.
+#[tauri::command]
+fn estimar(estado: State<'_, Estado>, id: i64, pomodoros: Option<u32>) -> Result<(), String> {
+    let db = estado.db.lock().map_err(|e| e.to_string())?;
+    db.editar_tarea(id, &CambiosTarea { estimate_pomodoros: Some(pomodoros), ..Default::default() })
+        .map_err(|e| e.to_string())
+}
+
 #[tauri::command]
 fn editar_tarea(
     estado: State<'_, Estado>,
@@ -372,27 +384,34 @@ fn urlencode(s: &str) -> String {
 /// La cuenta la hace `coffe_core::agenda`, que es puro y está probado. Aquí
 /// solo se junta lo que hay en la base con la configuración.
 #[tauri::command]
-fn agenda(estado: State<'_, Estado>, dias: u32) -> Result<Vec<DiaAgenda>, String> {
+fn agenda(estado: State<'_, Estado>, dias: u32) -> Result<Plan, String> {
     let db = estado.db.lock().map_err(|e| e.to_string())?;
     let tareas = db.tareas(&FiltroTareas::default()).map_err(|e| e.to_string())?;
 
-    let vencimientos: Vec<Vencimiento> = tareas
+    // Lo hecho ya no se debe, y lo que no tiene fecha no vence.
+    let comprometidas = tareas
         .iter()
-        // Lo hecho ya no se debe, y lo que no tiene fecha no vence.
         .filter(|t| t.state != TaskState::Done && t.state != TaskState::Archived)
-        .filter_map(|t| {
-            let fecha = t.due_date.as_deref()?.parse().ok()?;
-            // Sin estimación no se puede sumar. Aparece en el calendario como
-            // tarea, pero no pesa: inventarle un número sería peor que no
-            // contarla, porque el total dejaría de significar nada.
-            let estimados = t.estimate_pomodoros?;
-            let hechos = db.pomodoros_de_tarea(t.id).unwrap_or(0);
-            Some(Vencimiento { fecha, pomodoros: estimados.saturating_sub(hechos) })
-        })
-        .collect();
+        .filter(|t| t.due_date.is_some());
+
+    let mut vencimientos = Vec::new();
+    let mut sin_estimar = 0;
+
+    for t in comprometidas {
+        let Some(fecha) = t.due_date.as_deref().and_then(|d| d.parse().ok()) else { continue };
+        // Sin estimación no hay número que sumar. Se cuenta aparte en vez de
+        // ignorarla: inventarle un valor dejaría el total sin significado, y
+        // callarla haría que el plan dijera "todo cabe" sin haber mirado.
+        let Some(estimados) = t.estimate_pomodoros else {
+            sin_estimar += 1;
+            continue;
+        };
+        let hechos = db.pomodoros_de_tarea(t.id).unwrap_or(0);
+        vencimientos.push(Vencimiento { fecha, pomodoros: estimados.saturating_sub(hechos) });
+    }
 
     let hoy = chrono::Local::now().date_naive();
-    Ok(planificar(hoy, &vencimientos, dias.clamp(1, 180), &estado.cfg.agenda))
+    Ok(planificar_todo(hoy, &vencimientos, sin_estimar, dias.clamp(1, 180), &estado.cfg.agenda))
 }
 
 /// La configuración en uso, para que la ventana no tenga que adivinar cuántos
@@ -476,6 +495,7 @@ pub fn run() {
             mover_a_columna,
             crear_tarea,
             cambiar_prioridad,
+            estimar,
             editar_tarea,
             mover_de_proyecto,
             borrar_tarea,

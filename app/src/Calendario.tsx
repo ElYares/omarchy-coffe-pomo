@@ -11,6 +11,7 @@ import {
   hoyLocal,
   pendientes,
   type DiaAgenda,
+  type Plan,
   type Tarea,
 } from "./tipos";
 
@@ -30,13 +31,15 @@ interface Props {
 }
 
 export function Calendario({ tareas, alElegir }: Props) {
-  const [plan, setPlan] = useState<DiaAgenda[]>([]);
+  const [plan, setPlan] = useState<Plan>({ dias: [], sin_estimar: 0 });
   const [vista, setVista] = useState<"mes" | "agenda">("mes");
   const hoy = useMemo(hoyLocal, []);
   const [mesVisible, setMesVisible] = useState(() => hoy.slice(0, 7));
 
   useEffect(() => {
-    invoke<DiaAgenda[]>("agenda", { dias: HORIZONTE }).then(setPlan).catch(() => setPlan([]));
+    invoke<Plan>("agenda", { dias: HORIZONTE })
+      .then(setPlan)
+      .catch(() => setPlan({ dias: [], sin_estimar: 0 }));
   }, [tareas]);
 
   // Lo que vence cada día, indexado por fecha.
@@ -52,16 +55,16 @@ export function Calendario({ tareas, alElegir }: Props) {
   }, [tareas]);
 
   const planPorDia = useMemo(
-    () => new Map(plan.map((d) => [d.fecha, d])),
+    () => new Map(plan.dias.map((d) => [d.fecha, d])),
     [plan],
   );
 
-  const apretado = plan.find((d) => d.imposible) ?? null;
+  const apretado = plan.dias.find((d) => d.imposible) ?? null;
 
   return (
     <div className="calendario">
       <header className="calendario__barra">
-        <Veredicto dia={apretado} hoy={hoy} />
+        <Veredicto dia={apretado} hoy={hoy} sinEstimar={plan.sin_estimar} />
         <div className="calendario__vistas">
           {(["mes", "agenda"] as const).map((v) => (
             <button
@@ -85,22 +88,53 @@ export function Calendario({ tareas, alElegir }: Props) {
           alElegir={alElegir}
         />
       ) : (
-        <Agenda plan={plan} hoy={hoy} porDia={porDia} alElegir={alElegir} />
+        <Agenda plan={plan.dias} hoy={hoy} porDia={porDia} alElegir={alElegir} />
       )}
     </div>
   );
 }
 
-/** La respuesta corta a "¿voy bien?". Es lo primero que hay que leer. */
-function Veredicto({ dia, hoy }: { dia: DiaAgenda | null; hoy: string }) {
+/**
+ * La respuesta corta a "¿voy bien?". Es lo primero que hay que leer, así que no
+ * puede sonar más seguro de lo que es: una tarea con fecha y sin estimación no
+ * pesa en ningún día, y decir "todo cabe" sin mencionarlas sería afirmar algo
+ * que la cuenta no ha mirado.
+ */
+function Veredicto({
+  dia,
+  hoy,
+  sinEstimar,
+}: {
+  dia: DiaAgenda | null;
+  hoy: string;
+  sinEstimar: number;
+}) {
+  const pendiente =
+    sinEstimar > 0 ? (
+      <>
+        {" "}
+        <span className="veredicto__hueco">
+          {sinEstimar} con entrega y sin estimar no{" "}
+          {sinEstimar === 1 ? "entra" : "entran"} en la cuenta.
+        </span>
+      </>
+    ) : null;
+
   if (!dia) {
-    return <p className="veredicto veredicto--cabe">Todo lo comprometido cabe.</p>;
+    return (
+      <p className={`veredicto ${sinEstimar > 0 ? "veredicto--parcial" : "veredicto--cabe"}`}>
+        {sinEstimar > 0 ? "Lo que se puede contar cabe." : "Todo lo comprometido cabe."}
+        {pendiente}
+      </p>
+    );
   }
+
   const exceso = dia.deuda_acumulada - dia.capacidad_acumulada;
   return (
     <p className="veredicto veredicto--no-cabe">
       <strong>{comoSeLlama(dia.fecha, hoy)}</strong> no cabe: sobran {exceso} pomodoro
       {exceso === 1 ? "" : "s"}. Mueve trabajo o mueve la fecha.
+      {pendiente}
     </p>
   );
 }

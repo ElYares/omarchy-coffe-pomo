@@ -119,6 +119,13 @@ export interface DiaAgenda {
   imposible: boolean;
 }
 
+/** El plan entero: los días y lo que no se pudo contar. */
+export interface Plan {
+  dias: DiaAgenda[];
+  /** Tareas con entrega y sin estimación: no pesan en ningún día. */
+  sin_estimar: number;
+}
+
 export interface Config {
   pomodoro: {
     focus_minutes: number;

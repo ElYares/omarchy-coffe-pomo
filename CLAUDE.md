@@ -40,6 +40,11 @@ escribe estados: le pide al daemon lo que toca al reloj (arrancar, cambiar,
 aparcar, terminar) y solo escribe directo lo que no lo toca. La decisión vive
 en `decidir()` en `app/src-tauri/src/lib.rs`, con pruebas.
 
+**Un total que se calla lo que ignora es peor que no tener total**, porque se
+lee como si lo supiera todo. Si un cálculo deja algo fuera —una tarea sin
+estimar, una nota con un estado que no se reconoce— eso se cuenta aparte y se
+enseña, nunca se traga.
+
 Cuando una regla se enseña en la interfaz —el congelado de la prioridad, por
 ejemplo— tiene que mirar **el mismo dato** que el backend. Dos copias de la
 misma regla con condiciones distintas se separan, y el usuario ve un botón
@@ -63,7 +68,7 @@ activo que al pulsarlo falla.
 ## Comprobar
 
 ```bash
-cargo test                   # 87 pruebas
+cargo test                   # 114 pruebas
 cargo clippy --all-targets   # sin avisos
 cargo fmt --check
 cd app && pnpm build         # tsc estricto + vite

@@ -124,3 +124,18 @@ fn sin_nada_que_entregar_el_plan_sigue_teniendo_dias() {
     assert!(plan.iter().all(|d| d.debidos == 0 && !d.imposible));
     assert_eq!(plan[0].fecha, lunes());
 }
+
+#[test]
+fn un_plan_que_ignora_trabajo_no_puede_decir_que_todo_cabe() {
+    // Con un backlog recién traído del vault, donde ninguna historia lleva
+    // estimación, el plan sumaría cero y diría que la semana está despejada.
+    use coffe_core::agenda::planificar_todo;
+
+    let vacio = planificar_todo(lunes(), &[], 8, 7, &cfg());
+    assert!(vacio.primer_imposible().is_none(), "no hay nada que sumar");
+    assert!(!vacio.es_completa(), "pero la cuenta NO está completa, y hay que decirlo");
+    assert_eq!(vacio.sin_estimar, 8);
+
+    let completo = planificar_todo(lunes(), &[vence(1, 4)], 0, 7, &cfg());
+    assert!(completo.es_completa());
+}

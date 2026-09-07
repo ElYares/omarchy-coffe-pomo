@@ -179,7 +179,13 @@ esos días ya no queda capacidad.
       de vivirlo. Se compara contra `[agenda] pomodoros_por_dia` (8 por
       defecto) y los fines de semana no suman capacidad salvo que se diga
 - [x] Una tarea sin estimación sale en el calendario pero **no pesa**:
-      inventarle un número dejaría el total sin significado
+      inventarle un número dejaría el total sin significado. Y el veredicto
+      **dice cuántas ignora**: con un backlog recién traído del vault, donde
+      ninguna historia lleva estimación, decir "todo cabe" sería afirmar algo
+      que la cuenta no ha mirado
+- [x] Estimar en un clic desde la tarjeta, con saltos de Fibonacci: a partir de
+      cierto tamaño la diferencia entre 5 y 6 es ruido, y ofrecer 6 invita a
+      fingir una precisión que nadie tiene
 
 ---
 

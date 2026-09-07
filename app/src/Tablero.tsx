@@ -249,6 +249,8 @@ function Tarjeta({
               Servir el café
             </button>
           )}
+          <Estimador tarea={tarea} recargar={recargar} alFallar={alFallar} />
+
           <div className="tarjeta__prioridades">
             {(["high", "medium", "low"] as Prioridad[]).map((p) => (
               <button
@@ -286,6 +288,61 @@ function Tarjeta({
         </div>
       )}
     </li>
+  );
+}
+
+/**
+ * Estimar en un clic.
+ *
+ * Los números no son arbitrarios: saltan como la serie de Fibonacci porque a
+ * partir de cierto tamaño la diferencia entre 5 y 6 pomodoros es ruido, y
+ * ofrecer 6 invita a fingir una precisión que nadie tiene. El 8 está en rojo
+ * porque Cirillo diría que a esa altura la tarea hay que partirla.
+ *
+ * Una tarea con entrega y sin estimar no pesa en el calendario, así que esto no
+ * es un adorno: es lo que hace que la cuenta signifique algo.
+ */
+function Estimador({
+  tarea,
+  recargar,
+  alFallar,
+}: {
+  tarea: Tarea;
+  recargar: () => void;
+  alFallar: (e: string) => void;
+}) {
+  async function poner(n: number | null) {
+    try {
+      await invoke("estimar", { id: tarea.id, pomodoros: n });
+    } catch (e) {
+      alFallar(String(e));
+    }
+    recargar();
+  }
+
+  return (
+    <div className="estimador">
+      <span className="estimador__rotulo">Pomodoros</span>
+      <div className="estimador__botones">
+        {[1, 2, 3, 5, 8].map((n) => (
+          <button
+            key={n}
+            className={`chip${tarea.estimate_pomodoros === n ? " chip--puesta" : ""}${
+              n >= 8 ? " chip--demasiado" : ""
+            }`}
+            title={n >= 8 ? "a partir de aquí, Cirillo diría que la partas" : `${n} pomodoros`}
+            onClick={() => poner(n)}
+          >
+            {n}
+          </button>
+        ))}
+        {tarea.estimate_pomodoros !== null && (
+          <button className="chip chip--tenue" onClick={() => poner(null)} title="quitar la estimación">
+            ×
+          </button>
+        )}
+      </div>
+    </div>
   );
 }
 
