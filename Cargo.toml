@@ -1,0 +1,17 @@
+[workspace]
+resolver = "3"
+members = ["crates/coffe-core"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+repository = "https://github.com/elyares/omarchy-coffe-pomo"
+
+[workspace.dependencies]
+coffe-core = { path = "crates/coffe-core" }
+
+[profile.release]
+lto = true
+codegen-units = 1
+strip = true
