@@ -4,7 +4,7 @@
 
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { Orden, Proyecto, Snapshot, Tarea, Tema } from "./tipos";
 
 export function useReloj() {
@@ -71,15 +71,22 @@ export function useTema() {
   return tema;
 }
 
-/** Las tareas y proyectos, releídos cuando el reloj cambia de estado. */
+/**
+ * Las tareas y proyectos. Se releen cuando el reloj cambia de fase —una tarea
+ * que arranca cambia de columna sola— y cuando el tablero lo pide tras haber
+ * escrito algo.
+ */
 export function useTareas(pista: unknown) {
   const [tareas, setTareas] = useState<Tarea[]>([]);
   const [proyectos, setProyectos] = useState<Proyecto[]>([]);
+  const [sello, setSello] = useState(0);
 
   useEffect(() => {
     invoke<Tarea[]>("tareas").then(setTareas).catch(() => setTareas([]));
     invoke<Proyecto[]>("proyectos").then(setProyectos).catch(() => setProyectos([]));
-  }, [pista]);
+  }, [pista, sello]);
 
-  return { tareas, proyectos };
+  const recargar = useCallback(() => setSello((n) => n + 1), []);
+
+  return { tareas, proyectos, recargar };
 }

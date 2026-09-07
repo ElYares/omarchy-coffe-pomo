@@ -423,3 +423,311 @@ body {
   width: 160px;
   height: 160px;
 }
+
+/* --- pestañas ---------------------------------------------------------- */
+
+.pestanas {
+  display: flex;
+  gap: 4px;
+  /* La barra es el asa de la ventana; estos botones no pueden arrastrarla. */
+  -webkit-app-region: no-drag;
+}
+
+.pestana {
+  padding: 4px 12px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: none;
+  color: var(--tenue);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.pestana:hover {
+  color: var(--tinta);
+}
+
+.pestana--puesta {
+  border-color: var(--borde);
+  background: var(--placa);
+  color: var(--tinta);
+}
+
+/* --- el tablero -------------------------------------------------------- */
+
+.principal--tablero {
+  /* Hay que redeclarar las COLUMNAS, no solo las filas: `.principal` monta la
+     rejilla de la vista de la taza —escena y panel— y sin pisarla el tablero
+     entero se metía en su primera columna, a media ventana.
+     El `minmax(0, 1fr)` es lo que deja que las columnas se encojan y crezcan
+     con la ventana; con `1fr` a secas el contenido marca un mínimo y el
+     tablero desborda. */
+  display: grid;
+  grid-template-columns: 1fr;
+  grid-template-rows: minmax(0, 1fr);
+  gap: 0;
+  min-height: 0;
+  padding: 12px 16px 16px;
+  overflow: hidden;
+}
+
+/* Flex y no grid: el compositor y el aviso aparecen y desaparecen, y una
+   rejilla de filas fijas hacía que las columnas cayeran en una fila `auto`
+   dejando la `1fr` vacía al fondo. Con flex, lo que sobra se lo queda siempre
+   quien lo pide. */
+.tablero {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  height: 100%;
+  min-height: 0;
+}
+
+.tablero__barra {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.selector,
+.campo {
+  padding: 6px 8px;
+  border: 1px solid var(--borde);
+  border-radius: 7px;
+  background: var(--placa);
+  color: var(--tinta);
+  font: inherit;
+  font-size: 13px;
+}
+
+.campo--ancho {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.campo--corto {
+  width: 72px;
+}
+
+.boton--fino {
+  padding: 6px 10px;
+  font-size: 13px;
+}
+
+.compositor {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 10px;
+  border: 1px solid var(--borde);
+  border-radius: 9px;
+  background: var(--placa);
+}
+
+.columnas {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.columna {
+  display: grid;
+  grid-template-rows: auto auto 1fr;
+  min-height: 0;
+  padding: 10px;
+  border: 1px solid var(--borde);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--tinta) 3%, transparent);
+}
+
+/* La diana tiene que verse mientras se arrastra: sin ella no se sabe dónde va
+   a caer la tarjeta hasta que ya cayó. */
+.columna--diana {
+  border-color: color-mix(in srgb, var(--acento) 60%, transparent);
+  background: color-mix(in srgb, var(--acento) 9%, transparent);
+}
+
+.columna__cabeza {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+}
+
+.columna__cabeza h2 {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+}
+
+.columna__cuenta {
+  color: var(--tenue);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.columna__pista {
+  margin-bottom: 6px;
+  color: var(--tenue);
+  font-size: 11px;
+}
+
+.columna__lista {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+  min-height: 0;
+}
+
+/* --- la tarjeta -------------------------------------------------------- */
+
+.tarjeta {
+  border: 1px solid var(--borde);
+  border-radius: 8px;
+  background: var(--fondo);
+  cursor: grab;
+}
+
+.tarjeta:active {
+  cursor: grabbing;
+}
+
+.tarjeta--activa {
+  border-color: color-mix(in srgb, var(--acento) 55%, transparent);
+  box-shadow: inset 2px 0 0 var(--acento);
+}
+
+.tarjeta__cuerpo {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 2px 8px;
+  width: 100%;
+  padding: 8px 10px;
+  border: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: inherit;
+}
+
+.tarjeta__titulo {
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.tarjeta__proyecto,
+.tarjeta__meta {
+  grid-column: 2;
+  color: var(--tenue);
+  font-size: 11px;
+}
+
+.tarjeta__meta {
+  font-variant-numeric: tabular-nums;
+}
+
+.tarjeta__reverso {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 0 10px 10px;
+}
+
+.tarjeta__prioridades {
+  display: flex;
+  gap: 4px;
+}
+
+.tarjeta__nota {
+  color: var(--tenue);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.chip {
+  flex: 1;
+  padding: 4px 6px;
+  border: 1px solid var(--borde);
+  border-radius: 999px;
+  background: none;
+  color: var(--tenue);
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.chip:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.chip--puesta.chip--high {
+  border-color: var(--alta);
+  color: var(--alta);
+}
+.chip--puesta.chip--medium {
+  border-color: var(--media);
+  color: var(--media);
+}
+.chip--puesta.chip--low {
+  border-color: var(--baja);
+  color: var(--baja);
+}
+
+/* --- el bote ----------------------------------------------------------- */
+
+.bote {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  padding: 5px 10px;
+  border: 1px solid var(--borde);
+  border-radius: 7px;
+  background: none;
+  color: var(--tenue);
+  font: inherit;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+
+.bote:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+.bote--lleno {
+  color: var(--tinta);
+}
+
+.bote svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* La tapa se levanta al pasar por encima: es la invitación a vaciarlo. */
+.bote__tapa {
+  transition: transform 0.18s ease;
+  transform-origin: 12px 6px;
+}
+
+.bote--lleno:hover .bote__tapa {
+  transform: translateY(-2px) rotate(-11deg);
+}
+
+.bote__tazas {
+  opacity: 0.55;
+}

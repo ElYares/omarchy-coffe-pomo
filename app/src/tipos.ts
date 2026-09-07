@@ -53,6 +53,10 @@ export interface Tarea {
   estimate_pomodoros: number | null;
   due_date: string | null;
   position: number;
+  /** Cuándo se trabajó por primera vez. Es la señal de que la prioridad ya no
+   *  se toca — la misma que usa el backend, para que no puedan discrepar. */
+  first_started_at: string | null;
+  completed_at: string | null;
   proyecto: string;
   pomodoros: number;
 }

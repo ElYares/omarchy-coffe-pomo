@@ -1,15 +1,52 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { Tablero } from "./Tablero";
 import { Taza, type EstadoTaza } from "./Taza";
 import { useReloj, useTareas, useTema } from "./reloj";
 import { ETIQUETA_PRIORIDAD, reloj, type Snapshot, type Tarea } from "./tipos";
+
+type Vista = "taza" | "tablero";
+
+/** La ventana reabre donde se dejó. Es una preferencia, no un dato: si el
+ *  navegador no deja leerla, se arranca en la taza y ya. */
+const vistaGuardada: Vista =
+  (typeof localStorage !== "undefined" && localStorage.getItem("coffe.vista")) === "tablero"
+    ? "tablero"
+    : "taza";
+
+/**
+ * `Ctrl+1` y `Ctrl+2` cambian de vista. La ventana no tiene menú ni barra de
+ * título del compositor, así que sin esto el único camino son las pestañas, y
+ * en mitad de un pomodoro soltar el teclado para buscar el ratón es justo la
+ * clase de interrupción que esto mide.
+ */
+function useAtajosDeVista(setVista: (v: Vista) => void) {
+  useEffect(() => {
+    function alPulsar(e: KeyboardEvent) {
+      if (!e.ctrlKey || e.altKey || e.metaKey) return;
+      const destino: Vista | null =
+        e.key === "1" ? "taza" : e.key === "2" ? "tablero" : null;
+      if (!destino) return;
+      e.preventDefault();
+      setVista(destino);
+      try {
+        localStorage.setItem("coffe.vista", destino);
+      } catch {
+        // Sin almacenamiento, el atajo funciona igual; solo no se recuerda.
+      }
+    }
+    window.addEventListener("keydown", alPulsar);
+    return () => window.removeEventListener("keydown", alPulsar);
+  }, [setVista]);
+}
 
 export default function App() {
   const { snap, caido, mandar } = useReloj();
   const tema = useTema();
   const [aviso, setAviso] = useState<string | null>(null);
   const anulado = useAnulado(snap);
-  // Releer la lista en cada cambio de fase basta: las tareas no se mueven solas.
-  const { tareas } = useTareas(snap?.phase ?? "sin");
+  const [vista, setVista] = useState<Vista>(vistaGuardada);
+  useAtajosDeVista(setVista);
+  const { tareas, proyectos, recargar } = useTareas(snap?.phase ?? "sin");
 
   async function ordenar(o: Parameters<typeof mandar>[0]) {
     setAviso(await mandar(o));
@@ -22,24 +59,49 @@ export default function App() {
     <div className="ventana">
       <header className="barra" data-tauri-drag-region>
         <span className="barra__nombre">coffe</span>
+        <nav className="pestanas">
+          {(["taza", "tablero"] as Vista[]).map((v) => (
+            <button
+              key={v}
+              className={`pestana${vista === v ? " pestana--puesta" : ""}`}
+              onClick={() => {
+                setVista(v);
+                try {
+                  localStorage.setItem("coffe.vista", v);
+                } catch {
+                  // Modo privado o almacenamiento lleno: no es motivo para
+                  // que dejen de funcionar las pestañas.
+                }
+              }}
+            >
+              {v === "taza" ? "Taza" : "Tablero"}
+            </button>
+          ))}
+        </nav>
         <span className="barra__tema">{tema?.nombre}</span>
       </header>
 
-      <main className="principal">
-        <section className="escena">
-          <Taza
-            estado={anulado ? "fria" : estadoDeTaza(snap)}
-            nivel={anulado ? 0.62 : nivelDeTaza(snap)}
-          />
-          <Cuenta snap={snap} anulado={anulado} />
-        </section>
+      {vista === "taza" ? (
+        <main className="principal">
+          <section className="escena">
+            <Taza
+              estado={anulado ? "fria" : estadoDeTaza(snap)}
+              nivel={anulado ? 0.62 : nivelDeTaza(snap)}
+            />
+            <Cuenta snap={snap} anulado={anulado} />
+          </section>
 
-        <aside className="panel">
-          <Controles snap={snap} ordenar={ordenar} />
-          {aviso && <p className="aviso">{aviso}</p>}
-          <Cola tareas={tareas} snap={snap} ordenar={ordenar} />
-        </aside>
-      </main>
+          <aside className="panel">
+            <Controles snap={snap} ordenar={ordenar} />
+            {aviso && <p className="aviso">{aviso}</p>}
+            <Cola tareas={tareas} snap={snap} ordenar={ordenar} />
+          </aside>
+        </main>
+      ) : (
+        <main className="principal principal--tablero">
+          <Tablero tareas={tareas} proyectos={proyectos} snap={snap} recargar={recargar} />
+        </main>
+      )}
 
       <footer className="pie">
         <Marcador snap={snap} />
