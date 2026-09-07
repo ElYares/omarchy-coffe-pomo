@@ -74,11 +74,6 @@ impl TaskState {
             TaskState::Archived => "archived",
         }
     }
-
-    /// Una tarea que ya arrancó alguna vez tiene la prioridad congelada.
-    pub fn ya_arranco(self) -> bool {
-        !matches!(self, TaskState::Pending)
-    }
 }
 
 impl FromStr for TaskState {

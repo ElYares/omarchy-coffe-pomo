@@ -153,10 +153,7 @@ fn la_prioridad_se_congela_con_el_primer_pomodoro() {
     db.marcar_en_curso(t, t0()).unwrap();
 
     let err = db.cambiar_prioridad(t, Priority::Low).unwrap_err();
-    assert!(
-        matches!(err, CoffeError::PrioridadCongelada { estado: "in_progress", .. }),
-        "salió {err:?}"
-    );
+    assert!(matches!(err, CoffeError::PrioridadCongelada { .. }), "salió {err:?}");
     assert_eq!(db.tarea(t).unwrap().priority, Priority::High, "y no se movió");
 }
 
@@ -585,4 +582,28 @@ fn borrar_una_tarea_con_tiempo_medido_se_niega() {
 
     db.borrar_tarea(t, true).unwrap();
     assert!(db.tarea(t).is_err());
+}
+
+#[test]
+fn reabrir_una_tarea_no_le_devuelve_la_virginidad() {
+    // Volver a pendiente sirve para corregirse, no para borrar lo que pasó:
+    // si reabrir soltara la prioridad, bastaría con un viaje de ida y vuelta
+    // por el tablero para reescribir con qué urgencia se trabajó algo.
+    let db = Db::en_memoria().unwrap();
+    let p = proyecto(&db, None, "strapp");
+    let t = tarea(&db, p, "hecha y deshecha");
+    db.cambiar_prioridad(t, Priority::High).unwrap();
+    db.marcar_en_curso(t, t0()).unwrap();
+    db.abrir_pomodoro(t, t0(), 1500, true).unwrap();
+    db.completar_pomodoro(t0() + Duration::minutes(25)).unwrap();
+    db.completar(t, t0() + Duration::minutes(25)).unwrap();
+
+    db.reabrir(t).unwrap();
+
+    let leida = db.tarea(t).unwrap();
+    assert_eq!(leida.state, TaskState::Pending);
+    assert_eq!(leida.completed_at, None);
+    assert_eq!(leida.first_started_at, Some(t0()), "el arranque real no se borra");
+    assert_eq!(db.resumen_tarea(t).unwrap().pomodoros_completados, 1);
+    assert!(db.cambiar_prioridad(t, Priority::Low).is_err(), "y la prioridad sigue congelada");
 }

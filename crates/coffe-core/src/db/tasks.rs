@@ -158,10 +158,15 @@ impl Db {
 
     /// Solo mientras la tarea siga sin arrancar. En cuanto tiene un pomodoro
     /// encima, la prioridad con la que se trabajó es historia y no se reescribe.
+    ///
+    /// La condición mira `first_started_at` y **no el estado actual**: si
+    /// mirara el estado, arrastrar la tarjeta de vuelta a "pendiente" en el
+    /// tablero descongelaría la prioridad, y un viaje de ida y vuelta bastaría
+    /// para reescribir con qué urgencia se trabajó algo.
     pub fn cambiar_prioridad(&self, id: i64, prioridad: Priority) -> Result<(), CoffeError> {
         let tarea = self.tarea(id)?;
-        if tarea.state.ya_arranco() {
-            return Err(CoffeError::PrioridadCongelada { id, estado: tarea.state.as_str() });
+        if tarea.first_started_at.is_some() {
+            return Err(CoffeError::PrioridadCongelada { id });
         }
         self.conn.execute(
             "UPDATE tasks SET priority = ?2 WHERE id = ?1",
@@ -332,6 +337,36 @@ impl Db {
         let sql = format!("UPDATE tasks SET {} WHERE id = ?", trozos.join(", "));
         let refs: Vec<&dyn rusqlite::ToSql> = vals.iter().map(|b| b.as_ref()).collect();
         self.conn.execute(&sql, refs.as_slice())?;
+        Ok(())
+    }
+
+    /// La devuelve a pendiente. Es lo que pasa al arrastrar una tarjeta de
+    /// vuelta a la primera columna: una tarea que se dio por hecha y no lo
+    /// estaba, o una del refri que ya no toca.
+    ///
+    /// **No borra el historial**: los pomodoros que se hicieron siguen ahí, y
+    /// `first_started_at` tampoco se toca, así que la prioridad sigue
+    /// congelada. Reabrir una tarea no la vuelve virgen.
+    pub fn reabrir(&self, id: i64) -> Result<(), CoffeError> {
+        let n = self.conn.execute(
+            "UPDATE tasks SET state = 'pending', completed_at = NULL, archived_at = NULL
+             WHERE id = ?1",
+            params![id],
+        )?;
+        if n == 0 {
+            return Err(CoffeError::NoExiste { que: "tarea", id });
+        }
+        Ok(())
+    }
+
+    /// Cambia el orden dentro de su columna.
+    pub fn reordenar(&self, id: i64, position: i64) -> Result<(), CoffeError> {
+        let n = self
+            .conn
+            .execute("UPDATE tasks SET position = ?2 WHERE id = ?1", params![id, position])?;
+        if n == 0 {
+            return Err(CoffeError::NoExiste { que: "tarea", id });
+        }
         Ok(())
     }
 

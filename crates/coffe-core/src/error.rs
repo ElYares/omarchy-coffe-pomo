@@ -22,10 +22,10 @@ pub enum CoffeError {
     NoExiste { que: &'static str, id: i64 },
 
     #[error(
-        "la tarea {id} ya arrancó ({estado}): la prioridad se congela con el \
-         primer pomodoro"
+        "la tarea {id} ya se trabajó: la prioridad se congela con el primer \
+         pomodoro, y no se descongela ni devolviéndola a pendiente"
     )]
-    PrioridadCongelada { id: i64, estado: &'static str },
+    PrioridadCongelada { id: i64 },
 
     #[error(
         "no puedes colgar el proyecto {id} de {destino}: es su propio \
