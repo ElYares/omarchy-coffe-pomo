@@ -1,6 +1,7 @@
 //! La capa de persistencia. Un `Db` es una conexión con el esquema al día.
 
 pub mod projects;
+pub mod reportes;
 pub mod schema;
 pub mod tasks;
 pub mod timing;
