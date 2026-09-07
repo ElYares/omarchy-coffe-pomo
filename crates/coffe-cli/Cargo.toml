@@ -9,6 +9,7 @@ chrono = "0.4.45"
 clap = { version = "4.6.6", features = ["derive"] }
 coffe-core = { version = "0.1.0", path = "../coffe-core" }
 coffe-ipc = { version = "0.1.0", path = "../coffe-ipc" }
+libc = "0.2.189"
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.151"
 tokio = { version = "1.53.1", features = ["rt-multi-thread", "macros", "net", "time", "signal", "io-util", "sync"] }

@@ -9,8 +9,10 @@
 //! y así siguen funcionando con el daemon apagado.
 
 mod barra;
+mod claude;
 mod daemon;
 mod tareas;
+mod vault;
 mod vista;
 
 use anyhow::{Context, Result};
@@ -92,6 +94,14 @@ enum Cmd {
     /// Las tazas del bote.
     Trash(TrashArgs),
 
+    /// El vault de Obsidian: de dónde salen las tareas.
+    #[command(subcommand)]
+    Vault(VaultCmd),
+
+    /// Lo llaman los hooks de Claude Code. No es para teclearlo a mano.
+    #[command(subcommand, hide = true)]
+    Claude(ClaudeCmd),
+
     /// Dónde vive cada cosa y qué configuración está en uso.
     Paths,
 }
@@ -116,6 +126,17 @@ enum ProjectCmd {
     },
     /// Le cambia el nombre. El slug se rehace solo.
     Rename { proyecto: String, nombre: String },
+    /// Liga (o desliga) el proyecto con su carpeta del vault de Obsidian.
+    Vault {
+        proyecto: String,
+        /// La carpeta dentro de `10 Projects`, como `tl-mas-server`.
+        carpeta: Option<String>,
+        /// Lo desliga.
+        #[arg(long, conflicts_with = "carpeta")]
+        clear: bool,
+    },
+    /// Qué proyecto corresponde a este directorio.
+    Here,
     /// Lo cuelga de otro padre, o de la raíz.
     Move {
         proyecto: String,
@@ -149,13 +170,40 @@ enum ProjectCmd {
 }
 
 #[derive(Subcommand)]
+enum ClaudeCmd {
+    /// Claude empezó a trabajar. Abre un tramo sobre la tarea en curso.
+    Start,
+    /// Claude paró. Cierra el tramo.
+    Stop,
+}
+
+#[derive(Subcommand)]
+enum VaultCmd {
+    /// Qué proyectos del vault tienen Backlog y a cuál de los tuyos apuntan.
+    Scan,
+    /// Trae los HU pendientes del vault al tablero. Es idempotente: se puede
+    /// correr cuando apetezca.
+    Import {
+        /// Solo este proyecto. Sin esto, todos los que estén ligados.
+        #[arg(long, short)]
+        project: Option<String>,
+        /// Enseña qué haría, sin escribir nada.
+        #[arg(long)]
+        dry_run: bool,
+        /// Trae también lo que en el vault ya está hecho o descartado.
+        #[arg(long)]
+        incluir_terminadas: bool,
+    },
+}
+
+#[derive(Subcommand)]
 enum TaskCmd {
     /// Da de alta una tarea.
     Add {
         titulo: String,
-        /// El proyecto: su id o su ruta, como `clientes/nutricore`.
+        /// El proyecto: su id o su ruta. Si se omite, el de este directorio.
         #[arg(long, short)]
-        project: String,
+        project: Option<String>,
         /// alta, media o baja.
         #[arg(long, short = 'P', default_value = "media")]
         priority: String,
@@ -180,6 +228,9 @@ enum TaskCmd {
         #[arg(long, short)]
         project: String,
     },
+    /// La devuelve a pendiente. No borra su historial ni descongela su
+    /// prioridad: reabrir sirve para corregirse, no para empezar de cero.
+    Reopen { task: i64 },
     /// La borra. Con tiempo medido encima hace falta `--force`.
     Rm {
         task: i64,
@@ -229,6 +280,8 @@ struct TrashArgs {
 }
 
 fn main() -> Result<()> {
+    restaurar_sigpipe();
+
     match Cli::parse().cmd {
         Cmd::Daemon => arrancar_daemon(),
 
@@ -288,6 +341,17 @@ fn main() -> Result<()> {
         Cmd::Project(cmd) => tareas::proyectos(&abrir_db()?, cmd),
         Cmd::Task(cmd) => tareas::tareas(&abrir_db()?, &config()?, cmd),
         Cmd::Trash(args) => tareas::papelera(&abrir_db()?, args.empty),
+        Cmd::Vault(cmd) => vault::ejecutar(&abrir_db()?, &config()?, cmd),
+
+        // Los hooks corren en cada mensaje: pase lo que pase, salen con 0. Un
+        // hook que falla ensucia la sesión de Claude con un error que no es
+        // suyo, y el pomodoro importa menos que el trabajo.
+        Cmd::Claude(cmd) => {
+            if let Err(e) = claude::ejecutar(cmd) {
+                eprintln!("coffe: {e}");
+            }
+            Ok(())
+        }
 
         Cmd::Paths => {
             let cfg_path = paths::config();
@@ -311,6 +375,18 @@ fn main() -> Result<()> {
             );
             Ok(())
         }
+    }
+}
+
+/// Rust ignora SIGPIPE al arrancar, y con eso `coffe task list | head` revienta
+/// con un panic de "Broken pipe" en vez de terminar en silencio como cualquier
+/// otra herramienta de terminal. Se devuelve la señal a su comportamiento de
+/// siempre, que es exactamente lo que espera una tubería.
+fn restaurar_sigpipe() {
+    // SAFETY: `signal` con SIG_DFL es lo que hace cualquier programa de C al
+    // arrancar; se llama antes de crear hilos y no toca nada más.
+    unsafe {
+        libc::signal(libc::SIGPIPE, libc::SIG_DFL);
     }
 }
 

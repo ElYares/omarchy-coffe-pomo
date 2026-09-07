@@ -442,6 +442,7 @@ dependencies = [
  "clap",
  "coffe-core",
  "coffe-ipc",
+ "libc",
  "serde",
  "serde_json",
  "tokio",

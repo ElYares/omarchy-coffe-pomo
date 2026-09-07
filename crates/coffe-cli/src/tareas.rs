@@ -102,6 +102,32 @@ pub fn proyectos(db: &Db, cmd: ProjectCmd) -> Result<()> {
             println!("De vuelta: {} ({n} proyecto(s))", db.ruta_proyecto(id)?);
         }
 
+        ProjectCmd::Vault { proyecto, carpeta, clear } => {
+            let id = resolver_proyecto(db, &proyecto)?;
+            match (carpeta, clear) {
+                (Some(c), _) => {
+                    db.fijar_vault(id, Some(&c))?;
+                    println!("[{id}] {} ← vault: {c}", db.ruta_proyecto(id)?);
+                }
+                (None, true) => {
+                    db.fijar_vault(id, None)?;
+                    println!("[{id}] {} — desligado del vault", db.ruta_proyecto(id)?);
+                }
+                (None, false) => anyhow::bail!("dime la carpeta, o --clear para desligarla"),
+            }
+        }
+
+        ProjectCmd::Here => {
+            let cwd = std::env::current_dir()?.display().to_string();
+            match db.proyecto_por_ruta(&cwd)? {
+                Some(p) => println!("[{}] {}", p.id, db.ruta_proyecto(p.id)?),
+                None => {
+                    println!("Este directorio no es de ningún proyecto.");
+                    println!("  coffe project repo <proyecto> {cwd}");
+                }
+            }
+        }
+
         ProjectCmd::Rm { proyecto, force } => {
             let id = resolver_proyecto(db, &proyecto)?;
             let ruta = db.ruta_proyecto(id)?;
@@ -184,7 +210,17 @@ fn ruta_de_slugs(todos: &[Project], p: &Project) -> String {
 pub fn tareas(db: &Db, cfg: &Config, cmd: TaskCmd) -> Result<()> {
     match cmd {
         TaskCmd::Add { titulo, project, priority, due, estimate } => {
-            let project_id = resolver_proyecto(db, &project)?;
+            let project_id = match &project {
+                Some(p) => resolver_proyecto(db, p)?,
+                // Sin `--project`, el del directorio. Apuntar una tarea del
+                // repo en el que estás no debería obligarte a teclear su ruta.
+                None => {
+                    let cwd = std::env::current_dir()?.display().to_string();
+                    db.proyecto_por_ruta(&cwd)?
+                        .map(|p| p.id)
+                        .context("este directorio no es de ningún proyecto: usa --project")?
+                }
+            };
             if let Some(d) = &due {
                 validar_fecha(d)?;
             }
@@ -198,6 +234,7 @@ pub fn tareas(db: &Db, cfg: &Config, cmd: TaskCmd) -> Result<()> {
                     estimate_pomodoros: estimate,
                     due_date: due,
                     vault_note: None,
+                    vault_id: None,
                 },
                 Utc::now(),
             )?;
@@ -265,6 +302,11 @@ pub fn tareas(db: &Db, cfg: &Config, cmd: TaskCmd) -> Result<()> {
             let destino = resolver_proyecto(db, &project)?;
             db.mover_tarea(task, destino)?;
             println!("[{task}] {} → {}", db.tarea(task)?.title, db.ruta_proyecto(destino)?);
+        }
+
+        TaskCmd::Reopen { task } => {
+            db.reabrir(task)?;
+            println!("[{task}] {} — de vuelta a pendiente", db.tarea(task)?.title);
         }
 
         TaskCmd::Rm { task, force } => {
@@ -366,6 +408,16 @@ fn mostrar(db: &Db, task_id: i64) -> Result<()> {
         "  interrup.   : {} internas ('), {} externas (\")",
         r.interrupciones_internas, r.interrupciones_externas
     );
+    if r.segundos_con_claude > 0 {
+        // Se compara contra la dedicación y no contra el tiempo efectivo: la
+        // dedicación es el rato en que de verdad se estuvo en la tarea.
+        let pct =
+            (r.segundos_con_claude as f64 / r.segundos_en_tramos.max(1) as f64 * 100.0).round();
+        println!("  con Claude  : {} ({pct}%)", duracion(r.segundos_con_claude));
+    }
+    if let Some(nota) = &t.vault_note {
+        println!("  nota        : {nota}");
+    }
     Ok(())
 }
 
