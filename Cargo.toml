@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/coffe-core"]
+members = ["crates/coffe-core", "crates/coffe-ipc", "crates/coffe-cli"]
 
 [workspace.package]
 version = "0.1.0"
@@ -10,6 +10,7 @@ repository = "https://github.com/elyares/omarchy-coffe-pomo"
 
 [workspace.dependencies]
 coffe-core = { path = "crates/coffe-core" }
+coffe-ipc = { path = "crates/coffe-ipc" }
 
 [profile.release]
 lto = true

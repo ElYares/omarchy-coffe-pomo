@@ -1,0 +1,42 @@
+# Instalación
+
+Todavía no hay instalador — llega en la Fase 8. Mientras tanto:
+
+```bash
+# 1. Compilar e instalar el binario
+cargo build --release
+install -Dm755 target/release/coffe ~/.local/bin/coffe
+
+# 2. Dejar el reloj corriendo
+install -Dm644 packaging/coffe.service ~/.config/systemd/user/coffe.service
+systemctl --user daemon-reload
+systemctl --user enable --now coffe
+
+# 3. Comprobar
+coffe status
+journalctl --user -u coffe -f
+```
+
+El daemon guarda todo en `~/.local/share/coffe/coffe.db` y escucha en
+`$XDG_RUNTIME_DIR/coffe.sock`. Para probar sin tocar tus datos reales, apunta
+`XDG_DATA_HOME`, `XDG_CONFIG_HOME` y `XDG_RUNTIME_DIR` a otro sitio — pero deja
+`XDG_RUNTIME_DIR` **corto**: la ruta de un socket unix no puede pasar de 108
+bytes.
+
+## Configuración
+
+`~/.config/coffe/config.toml`. Si no existe, se usan los valores del método
+clásico:
+
+```toml
+[pomodoro]
+focus_minutes = 25
+short_break_minutes = 5
+long_break_minutes = 15
+long_break_every = 4
+strict = true
+max_pomodoros_per_task = 7
+```
+
+`strict = false` permite pausar y reanudar el pomodoro y saltarse el descanso.
+Los pomodoros hechos así quedan marcados aparte y no cuentan como canónicos.
