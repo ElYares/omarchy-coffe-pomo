@@ -57,6 +57,8 @@ export interface Tarea {
    *  se toca — la misma que usa el backend, para que no puedan discrepar. */
   first_started_at: string | null;
   completed_at: string | null;
+  /** Ruta de la nota en el vault, si la tarea vino de ahí. */
+  vault_note: string | null;
   proyecto: string;
   pomodoros: number;
 }

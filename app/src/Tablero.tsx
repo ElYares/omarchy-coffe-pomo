@@ -271,6 +271,15 @@ function Tarjeta({
               Ya se trabajó: la prioridad con la que se hizo es historia.
             </p>
           )}
+          {tarea.vault_note && (
+            <button
+              className="boton boton--fino"
+              onClick={() => invoke("abrir_nota", { id: tarea.id }).catch((e) => alFallar(String(e)))}
+              title={tarea.vault_note}
+            >
+              Abrir la nota
+            </button>
+          )}
           <button className="boton boton--fino boton--tenue" onClick={borrar}>
             Borrar
           </button>

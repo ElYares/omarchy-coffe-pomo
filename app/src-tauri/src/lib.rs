@@ -271,6 +271,7 @@ fn crear_tarea(
                 estimate_pomodoros,
                 due_date,
                 vault_note: None,
+                vault_id: None,
             },
             chrono::Utc::now(),
         )
@@ -323,6 +324,47 @@ fn vaciar_papelera(estado: State<'_, Estado>) -> Result<usize, String> {
     drop(db);
     avisar_al_reloj();
     Ok(n)
+}
+
+/// Abre la nota de una tarea en Obsidian.
+///
+/// Se usa el esquema `obsidian://` y no `xdg-open` sobre el archivo: abrir el
+/// `.md` con el editor por defecto te saca del vault y pierdes los enlaces, que
+/// es justo lo que hace útil a la nota.
+#[tauri::command]
+fn abrir_nota(estado: State<'_, Estado>, id: i64) -> Result<(), String> {
+    let db = estado.db.lock().map_err(|e| e.to_string())?;
+    let tarea = db.tarea(id).map_err(|e| e.to_string())?;
+    let Some(nota) = tarea.vault_note else {
+        return Err("esta tarea no vino del vault".into());
+    };
+
+    // El nombre del vault es el de su carpeta, que es como lo registra Obsidian.
+    let raiz = estado.cfg.vault.path.trim_end_matches('/');
+    let vault = raiz.rsplit('/').next().unwrap_or_default();
+    if vault.is_empty() {
+        return Err("no hay vault configurado".into());
+    }
+    let archivo = nota.strip_suffix(".md").unwrap_or(&nota);
+
+    let uri = format!("obsidian://open?vault={}&file={}", urlencode(vault), urlencode(archivo));
+    std::process::Command::new("xdg-open").arg(&uri).spawn().map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+/// Lo justo para una URI: los nombres de las notas llevan espacios, acentos y
+/// alguna `&`, y cualquiera de los tres parte el enlace.
+fn urlencode(s: &str) -> String {
+    let mut out = String::with_capacity(s.len() * 2);
+    for b in s.as_bytes() {
+        match b {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
+                out.push(*b as char)
+            }
+            otro => out.push_str(&format!("%{otro:02X}")),
+        }
+    }
+    out
 }
 
 /// El plan de los próximos días: qué vence, cuánto se debe y si cabe.
@@ -439,7 +481,8 @@ pub fn run() {
             borrar_tarea,
             vaciar_papelera,
             agenda,
-            config
+            config,
+            abrir_nota
         ])
         .run(tauri::generate_context!())
         .expect("la ventana no pudo arrancar");
