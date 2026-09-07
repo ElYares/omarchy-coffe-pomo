@@ -1,0 +1,12 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Lo que la ventana necesita: escuchar los empujones del reloj y arrastrarse por su propia barra, que no tiene decoración del compositor.",
+  "windows": ["principal"],
+  "permissions": [
+    "core:default",
+    "core:event:allow-listen",
+    "core:event:allow-unlisten",
+    "core:window:allow-start-dragging"
+  ]
+}

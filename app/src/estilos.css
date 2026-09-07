@@ -1,0 +1,425 @@
+/* La ventana toma su paleta del tema activo de Omarchy: las variables las
+   escribe `useTema` leyendo colors.toml. Los valores de aquí son solo el
+   arranque, para que el primer fotograma no salga en blanco.
+
+   La taza NO usa estas variables. Sus colores viven en Taza.tsx a propósito:
+   un tema verde no puede dar café verde. */
+:root {
+  --fondo: #1a1512;
+  --tinta: #e6e1da;
+  --acento: #cbb693;
+  --seleccion: #3a2f28;
+
+  --tenue: color-mix(in srgb, var(--tinta) 55%, transparent);
+  --placa: color-mix(in srgb, var(--tinta) 7%, transparent);
+  --borde: color-mix(in srgb, var(--tinta) 14%, transparent);
+
+  --alta: #c47f66;
+  --media: #cbb693;
+  --baja: #7f9a9b;
+}
+
+:root[data-tema="claro"] {
+  --tenue: color-mix(in srgb, var(--tinta) 65%, transparent);
+  --placa: color-mix(in srgb, var(--tinta) 6%, transparent);
+  --borde: color-mix(in srgb, var(--tinta) 18%, transparent);
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+}
+
+html,
+body,
+#raiz {
+  height: 100%;
+}
+
+body {
+  background: var(--fondo);
+  color: var(--tinta);
+  font: 14px/1.5 system-ui, sans-serif;
+  overflow: hidden;
+  /* La ventana no lleva decoración del compositor: el redondeo lo pone ella. */
+  border-radius: 12px;
+}
+
+/* --- estructura ------------------------------------------------------- */
+
+.ventana {
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  height: 100%;
+}
+
+.barra {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--borde);
+  /* Sin barra de título del compositor, esta franja es el asa de la ventana. */
+  cursor: grab;
+  user-select: none;
+}
+
+.barra__nombre {
+  font-weight: 600;
+  letter-spacing: 0.08em;
+}
+
+.barra__tema {
+  color: var(--tenue);
+  font-size: 12px;
+}
+
+.principal {
+  display: grid;
+  grid-template-columns: 1fr minmax(280px, 360px);
+  gap: 8px;
+  min-height: 0;
+  padding: 16px;
+}
+
+.escena {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+  padding-left: 16px;
+  border-left: 1px solid var(--borde);
+}
+
+.pie {
+  display: flex;
+  gap: 18px;
+  align-items: center;
+  padding: 10px 16px;
+  border-top: 1px solid var(--borde);
+  color: var(--tenue);
+  font-size: 12px;
+}
+
+/* --- la taza ---------------------------------------------------------- */
+
+.taza {
+  width: min(46vh, 300px);
+  height: min(46vh, 300px);
+  flex: 0 0 auto;
+}
+
+/* Un segundo lineal, que es exactamente el ritmo al que llegan los snapshots:
+   así el nivel baja de corrido en vez de a saltos de un segundo. */
+.taza__cafe,
+.taza__superficie {
+  transition:
+    y 1s linear,
+    cy 1s linear,
+    height 1s linear;
+}
+
+.taza__vapor path {
+  animation: vapor 2.4s ease-in-out infinite;
+  opacity: 0;
+}
+
+@keyframes vapor {
+  0% {
+    opacity: 0;
+    transform: translateY(6px) scaleY(0.85);
+  }
+  35% {
+    opacity: 0.5;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-14px) scaleY(1.15);
+  }
+}
+
+/* Entrar y salir del refri: la taza baja al guardarse y sube al volver. */
+.taza--refri .taza__conjunto {
+  animation: guardar 0.45s ease-out;
+}
+
+@keyframes guardar {
+  from {
+    transform: translateY(-26px);
+    opacity: 0.2;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+
+.taza--fria .taza__conjunto {
+  animation: enfriar 0.6s ease-out;
+}
+
+@keyframes enfriar {
+  from {
+    filter: saturate(1);
+  }
+  to {
+    filter: saturate(0.55);
+  }
+}
+
+.taza--fria {
+  filter: saturate(0.55);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .taza__cafe,
+  .taza__superficie,
+  .taza__conjunto {
+    transition: none;
+    animation: none;
+  }
+  .taza__vapor path {
+    animation: none;
+    opacity: 0.35;
+  }
+}
+
+/* --- la cuenta -------------------------------------------------------- */
+
+.cuenta {
+  text-align: center;
+  min-width: 0;
+}
+
+.cuenta__reloj {
+  font-size: clamp(38px, 7vw, 62px);
+  font-weight: 200;
+  /* Tabulares: sin esto el reloj tiembla cada vez que cambia un dígito. */
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+  line-height: 1.05;
+}
+
+.cuenta__fase {
+  color: var(--acento);
+  font-size: 13px;
+  letter-spacing: 0.06em;
+  text-transform: lowercase;
+}
+
+.cuenta__tarea {
+  margin-top: 10px;
+  font-size: 15px;
+}
+
+.cuenta__tarea--refri {
+  color: var(--tenue);
+}
+
+.cuenta__proyecto {
+  display: block;
+  color: var(--tenue);
+  font-size: 12px;
+}
+
+/* --- controles -------------------------------------------------------- */
+
+.controles {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.controles__nota {
+  color: var(--tenue);
+  font-size: 13px;
+}
+
+.boton {
+  padding: 9px 12px;
+  border: 1px solid var(--borde);
+  border-radius: 8px;
+  background: var(--placa);
+  color: var(--tinta);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.boton:hover {
+  background: var(--seleccion);
+}
+
+.boton--principal {
+  border-color: color-mix(in srgb, var(--acento) 45%, transparent);
+  color: var(--acento);
+  font-weight: 600;
+}
+
+.boton--tenue {
+  color: var(--tenue);
+}
+
+.aviso {
+  padding: 8px 10px;
+  border-left: 3px solid var(--acento);
+  background: var(--placa);
+  border-radius: 4px;
+  font-size: 13px;
+}
+
+/* --- la cola de tareas ------------------------------------------------ */
+
+.cola {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+  min-height: 0;
+}
+
+.cola__vacia {
+  color: var(--tenue);
+  font-size: 13px;
+}
+
+.cola__vacia code,
+.apagado code {
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--placa);
+  font-size: 12px;
+}
+
+.cola__boton {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 4px 8px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.cola__boton:hover:not(:disabled) {
+  background: var(--placa);
+}
+
+.cola__boton:disabled {
+  cursor: default;
+}
+
+.cola__item--actual .cola__boton {
+  border-color: color-mix(in srgb, var(--acento) 35%, transparent);
+  background: var(--placa);
+}
+
+.cola__titulo {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cola__meta {
+  color: var(--tenue);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.cola__proyecto {
+  grid-column: 2 / -1;
+  color: var(--tenue);
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.prioridad {
+  align-self: center;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.prioridad--high {
+  background: var(--alta);
+}
+.prioridad--medium {
+  background: var(--media);
+}
+.prioridad--low {
+  background: var(--baja);
+}
+
+/* --- el pie ----------------------------------------------------------- */
+
+.ciclo {
+  display: inline-flex;
+  gap: 4px;
+}
+
+.grano {
+  width: 7px;
+  height: 7px;
+  border: 1px solid var(--tenue);
+  border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%;
+}
+
+.grano--lleno {
+  border-color: var(--acento);
+  background: var(--acento);
+}
+
+.pie__flexible {
+  color: var(--alta);
+}
+
+.pie__prioridad {
+  margin-left: auto;
+}
+
+/* --- estados sin reloj ------------------------------------------------ */
+
+.cargando,
+.apagado {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  height: 100%;
+  padding: 24px;
+  text-align: center;
+  color: var(--tenue);
+}
+
+.apagado h1 {
+  color: var(--tinta);
+  font-size: 18px;
+  font-weight: 500;
+}
+
+.apagado .taza {
+  width: 160px;
+  height: 160px;
+}

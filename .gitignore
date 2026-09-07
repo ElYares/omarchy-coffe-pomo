@@ -4,3 +4,7 @@ dist/
 *.db
 *.db-shm
 *.db-wal
+
+# Frontend
+app/dist/
+app/src-tauri/gen/

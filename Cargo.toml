@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/coffe-core", "crates/coffe-ipc", "crates/coffe-cli"]
+members = ["crates/coffe-core", "crates/coffe-ipc", "crates/coffe-cli", "app/src-tauri"]
 
 [workspace.package]
 version = "0.1.0"
