@@ -236,6 +236,20 @@ enum TaskCmd {
         #[arg(long, short)]
         project: String,
     },
+    /// La da por terminada, sin arrancarle un pomodoro.
+    ///
+    /// Es el contrario de `reopen`. Si la tarea es la que tiene el reloj
+    /// encima, se lo pide al daemon —y en estricto el pomodoro sigue hasta
+    /// sonar, que es la regla—; si no, se escribe y ya.
+    Done { task: i64 },
+
+    /// La aparta: trabajo que ya no se va a hacer.
+    ///
+    /// No es `rm`. Conserva el historial y los pomodoros que se le echaron
+    /// encima siguen contando en los reportes: decidir que algo ya no se hace
+    /// no vuelve mentira el tiempo que ya le dedicaste.
+    Drop { task: i64 },
+
     /// La devuelve a pendiente. No borra su historial ni descongela su
     /// prioridad: reabrir sirve para corregirse, no para empezar de cero.
     Reopen { task: i64 },

@@ -13,7 +13,8 @@ use coffe_core::db::tasks::{
     AvisoEstimacion, CambiosTarea, FiltroTareas, NuevaTarea, revisar_estimacion,
 };
 use coffe_core::model::TaskState;
-use coffe_ipc::{Phase, Snapshot};
+use coffe_core::tablero::{Destino, Escritura, Movida, decidir};
+use coffe_ipc::{Phase, Request, Snapshot};
 
 use crate::{ListArgs, ProjectCmd, TaskCmd, parsear_prioridad};
 
@@ -304,6 +305,9 @@ pub fn tareas(db: &Db, cfg: &Config, cmd: TaskCmd) -> Result<()> {
             println!("[{task}] {} → {}", db.tarea(task)?.title, db.ruta_proyecto(destino)?);
         }
 
+        TaskCmd::Done { task } => llevar(db, task, Destino::Hecha)?,
+        TaskCmd::Drop { task } => llevar(db, task, Destino::Archivada)?,
+
         TaskCmd::Reopen { task } => {
             db.reabrir(task)?;
             println!("[{task}] {} — de vuelta a pendiente", db.tarea(task)?.title);
@@ -449,6 +453,70 @@ fn marca_estado(s: TaskState) -> &'static str {
         TaskState::Done => "hecha",
         TaskState::Archived => "archivada",
     }
+}
+
+/// Lleva una tarea a un destino.
+///
+/// La decisión es de `coffe_core::tablero::decidir`, la MISMA que usa el
+/// tablero de la ventana. Por eso `coffe task done 57` y arrastrar esa tarjeta
+/// a "Hechas" hacen exactamente lo mismo, incluido negarse por lo mismo.
+///
+/// Preguntarle al reloj su estado puede fallar —el daemon puede estar
+/// apagado—, y eso **no** puede impedir cerrar una tarea: con el daemon caído
+/// no hay pomodoro corriendo, así que ninguna tarea es la activa y todo se
+/// escribe directo. Un daemon parado no es razón para no poder ordenar tu
+/// tablero.
+fn llevar(db: &Db, task: i64, destino: Destino) -> Result<()> {
+    let snap = coffe_ipc::client::ask(&coffe_core::paths::socket(), &Request::Status).ok();
+    let hay_reloj = snap.as_ref().is_some_and(|s| !s.state.is_idle());
+    let es_la_activa =
+        hay_reloj && snap.as_ref().and_then(|s| s.task.as_ref()).map(|t| t.id) == Some(task);
+
+    let t = db.tarea(task)?;
+    let titulo = t.title.clone();
+
+    match decidir(destino, task, es_la_activa, hay_reloj, t.state) {
+        Movida::Nada => println!("[{task}] {titulo} — ya estaba así"),
+
+        Movida::Rechazar(por_que) => anyhow::bail!("{por_que}"),
+
+        Movida::AlReloj(orden) => {
+            let snap = coffe_ipc::client::ask(&coffe_core::paths::socket(), &orden.into())
+                .context("el reloj tiene que decidirlo y el daemon no responde")?;
+            println!("[{task}] {titulo} — hecha");
+            // En estricto el pomodoro NO se calla: la tarea queda hecha y el
+            // reloj sigue hasta sonar. Callarlo aquí haría creer que terminó.
+            if !snap.state.is_idle() {
+                println!("  el pomodoro sigue: la tarea está hecha, pero tiene que sonar");
+            }
+        }
+
+        Movida::ALaBase(escritura) => {
+            let ahora = Utc::now();
+            match escritura {
+                Escritura::Aparcar => db.aparcar(task),
+                Escritura::Completar => db.completar(task, ahora),
+                Escritura::Reabrir => db.reabrir(task),
+                Escritura::Archivar => db.archivar_tarea(task, ahora),
+            }?;
+
+            let r = db.resumen_tarea(task)?;
+            let que = match escritura {
+                Escritura::Archivar => "apartada, ya no se va a hacer",
+                _ => "hecha",
+            };
+            println!("[{task}] {titulo} — {que}");
+            // El historial que se conserva, dicho en voz alta: es la diferencia
+            // con `rm`, y es justo lo que hace que apartar no dé miedo.
+            if r.pomodoros_completados > 0 {
+                println!(
+                    "  conserva {} pomodoro(s) medidos; siguen contando en los reportes",
+                    r.pomodoros_completados
+                );
+            }
+        }
+    }
+    Ok(())
 }
 
 pub fn papelera(db: &Db, vaciar: bool) -> Result<()> {

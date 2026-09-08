@@ -223,6 +223,27 @@ impl Db {
         Ok(())
     }
 
+    /// Aparta una tarea: trabajo que ya no se va a hacer.
+    ///
+    /// **No es un borrado.** `task rm` pierde el historial; esto lo conserva y
+    /// solo la saca de la vista, para que los pomodoros que se le echaron
+    /// encima —si los hubo— sigan contando en los reportes. Decidir que algo ya
+    /// no se hace no vuelve mentira el tiempo que ya se le dedicó.
+    ///
+    /// Se puede archivar desde cualquier estado, hecha incluida. Lo que no se
+    /// puede es archivar la que tiene el reloj encima, y eso lo decide
+    /// `coffe_core::tablero::decidir`, no esta función.
+    pub fn archivar_tarea(&self, id: i64, now: DateTime<Utc>) -> Result<(), CoffeError> {
+        let n = self.conn.execute(
+            "UPDATE tasks SET state = 'archived', archived_at = ?2 WHERE id = ?1",
+            params![id, a_texto(now)],
+        )?;
+        if n == 0 {
+            return Err(CoffeError::NoExiste { que: "tarea", id });
+        }
+        Ok(())
+    }
+
     /// Vaciar la papelera: las tazas del bote se van. No se borra nada, se
     /// archiva — los tiempos siguen contando para los reportes.
     pub fn vaciar_papelera(&self, now: DateTime<Utc>) -> Result<usize, CoffeError> {
