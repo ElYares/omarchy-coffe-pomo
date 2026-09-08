@@ -1,21 +1,24 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Calendario } from "./Calendario";
 import { Proyectos } from "./Proyectos";
+import { Reportes } from "./Reportes";
 import { Tablero } from "./Tablero";
 import { Taza, type EstadoTaza } from "./Taza";
+import { FiltroProyecto, useConDescendientes, useFiltroRecordado } from "./filtro";
 import { useReloj, useTareas, useTema } from "./reloj";
 import { ETIQUETA_PRIORIDAD, reloj, type Snapshot, type Tarea } from "./tipos";
 
-type Vista = "taza" | "tablero" | "calendario" | "proyectos";
+type Vista = "taza" | "tablero" | "calendario" | "proyectos" | "reportes";
 
 /** La ventana reabre donde se dejó. Es una preferencia, no un dato: si el
  *  navegador no deja leerla, se arranca en la taza y ya. */
-const VISTAS: Vista[] = ["taza", "tablero", "calendario", "proyectos"];
+const VISTAS: Vista[] = ["taza", "tablero", "calendario", "proyectos", "reportes"];
 const NOMBRE_VISTA: Record<Vista, string> = {
   taza: "Taza",
   tablero: "Tablero",
   calendario: "Calendario",
   proyectos: "Proyectos",
+  reportes: "Reportes",
 };
 
 const vistaGuardada: Vista = (() => {
@@ -28,7 +31,7 @@ const vistaGuardada: Vista = (() => {
 })();
 
 /**
- * `Ctrl+1` y `Ctrl+2` cambian de vista. La ventana no tiene menú ni barra de
+ * `Ctrl+1`…`Ctrl+5` cambian de vista. La ventana no tiene menú ni barra de
  * título del compositor, así que sin esto el único camino son las pestañas, y
  * en mitad de un pomodoro soltar el teclado para buscar el ratón es justo la
  * clase de interrupción que esto mide.
@@ -61,6 +64,11 @@ export default function App() {
   const [vista, setVista] = useState<Vista>(vistaGuardada);
   useAtajosDeVista(setVista);
   const { tareas, proyectos, recargar } = useTareas(snap?.phase ?? "sin");
+  // El filtro de la taza es SUYO: el tablero es donde se organiza todo y ahí
+  // querer verlo todo es lo normal, mientras que aquí se está eligiendo qué
+  // hacer AHORA y el resto de proyectos solo estorba.
+  const [proyecto, setProyecto] = useFiltroRecordado("coffe.taza.proyecto", proyectos);
+  const dentroDelFiltro = useConDescendientes(proyecto, proyectos);
 
   async function ordenar(o: Parameters<typeof mandar>[0]) {
     setAviso(await mandar(o));
@@ -110,7 +118,13 @@ export default function App() {
           <aside className="panel">
             <Controles snap={snap} ordenar={ordenar} />
             {aviso && <p className="aviso">{aviso}</p>}
-            <Cola tareas={tareas} snap={snap} ordenar={ordenar} />
+            <FiltroProyecto
+              proyectos={proyectos}
+              valor={proyecto}
+              alCambiar={setProyecto}
+              todos="Todo lo que hay"
+            />
+            <Cola tareas={tareas} dentro={dentroDelFiltro} snap={snap} ordenar={ordenar} />
           </aside>
         </main>
       ) : vista === "tablero" ? (
@@ -126,9 +140,13 @@ export default function App() {
             alElegir={() => irA("tablero")}
           />
         </main>
-      ) : (
+      ) : vista === "proyectos" ? (
         <main className="principal principal--tablero">
           <Proyectos proyectos={proyectos} tareas={tareas} recargar={recargar} />
+        </main>
+      ) : (
+        <main className="principal principal--tablero">
+          <Reportes />
         </main>
       )}
 
@@ -315,10 +333,13 @@ function Controles({ snap, ordenar }: { snap: Snapshot; ordenar: Ordenar }) {
 
 function Cola({
   tareas,
+  dentro,
   snap,
   ordenar,
 }: {
   tareas: Tarea[];
+  /** Los proyectos que deja pasar el filtro, o `null` si no hay filtro. */
+  dentro: Set<number> | null;
   snap: Snapshot;
   ordenar: Ordenar;
 }) {
@@ -326,20 +347,40 @@ function Cola({
     () => tareas.filter((t) => t.state !== "done" && t.state !== "archived"),
     [tareas],
   );
+  const visibles = useMemo(
+    () => (dentro === null ? vivas : vivas.filter((t) => dentro.has(t.project_id))),
+    [vivas, dentro],
+  );
   const corriendo = snap.phase === "focus" || snap.phase === "overlearning";
+
+  // Lo que el filtro deja fuera se dice. Una lista corta que no avisa de que
+  // está recortada se lee como si eso fuera todo lo que hay pendiente, y esa
+  // es justo la mentira que esta app existe para no contar.
+  const ocultas = vivas.length - visibles.length;
+  const laActual = snap.task;
+  const actualFuera = laActual !== null && !visibles.some((t) => t.id === laActual.id);
 
   if (vivas.length === 0) {
     return (
       <p className="cola__vacia">
-        No hay tareas. Créalas con <code>coffe task add</code> — el tablero llega
-        en la fase siguiente.
+        No hay tareas. Créalas en el tablero o con <code>coffe task add</code>.
+      </p>
+    );
+  }
+
+  if (visibles.length === 0) {
+    return (
+      <p className="cola__vacia">
+        Nada vivo en este proyecto. Quedan {ocultas} en los demás: cambia el
+        filtro para verlas.
       </p>
     );
   }
 
   return (
+    <>
     <ul className="cola">
-      {vivas.map((t) => {
+      {visibles.map((t) => {
         const actual = snap.task?.id === t.id;
         return (
           <li key={t.id} className={`cola__item${actual ? " cola__item--actual" : ""}`}>
@@ -366,6 +407,13 @@ function Cola({
         );
       })}
     </ul>
+    {ocultas > 0 && (
+      <p className="cola__ocultas">
+        {ocultas === 1 ? "1 tarea viva" : `${ocultas} tareas vivas`} fuera del
+        filtro{actualFuera && ", incluida la que está corriendo"}
+      </p>
+    )}
+    </>
   );
 }
 

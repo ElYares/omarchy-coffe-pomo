@@ -175,3 +175,60 @@ export function pendientes(t: Tarea): number | null {
   if (t.estimate_pomodoros === null) return null;
   return Math.max(0, t.estimate_pomodoros - t.pomodoros);
 }
+
+// --- los reportes -------------------------------------------------------
+
+/** Lo que pasó en un tramo de tiempo. Espejo de `ResumenPeriodo`. */
+export interface ResumenPeriodo {
+  pomodoros_completados: number;
+  pomodoros_anulados: number;
+  segundos_efectivos: number;
+  tareas_terminadas: number;
+  interrupciones_internas: number;
+  interrupciones_externas: number;
+  /** Días distintos con al menos un pomodoro. Sirve para leer el total: 40
+   *  pomodoros en cuatro días no es lo mismo que en veinte. */
+  dias_con_trabajo: number;
+  segundos_con_claude: number;
+}
+
+/** Cuánto se lleva cada proyecto, con lo de sus hijos ya sumado. */
+export interface CargaProyecto {
+  project_id: number;
+  ruta: string;
+  pomodoros: number;
+  anulados: number;
+  segundos_efectivos: number;
+}
+
+/** Si tus estimaciones sirven de algo. */
+export interface Precision {
+  tareas: number;
+  estimados: number;
+  reales: number;
+  subestimadas: number;
+  clavadas: number;
+  sobreestimadas: number;
+  /** Terminadas SIN estimación: no entran en ninguna cuenta de arriba y por eso
+   *  se enseñan. */
+  sin_estimar: number;
+}
+
+/** El reporte entero. La tasa y el factor vienen calculados del backend: no se
+ *  recalculan aquí o serían dos versiones del mismo número. */
+export interface Reporte {
+  dias: number;
+  resumen: ResumenPeriodo;
+  tasa_anulacion: number;
+  cargas: CargaProyecto[];
+  precision: Precision;
+  factor: number | null;
+}
+
+/** `1 h 20 min`, o un guion cuando no hay nada que contar. */
+export function duracion(segundos: number): string {
+  if (segundos <= 0) return "—";
+  const h = Math.floor(segundos / 3600);
+  const m = Math.floor((segundos % 3600) / 60);
+  return h > 0 ? `${h} h ${String(m).padStart(2, "0")} min` : `${m} min`;
+}

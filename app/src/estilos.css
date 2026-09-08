@@ -1229,3 +1229,163 @@ body {
 .aviso--bueno {
   border-left-color: var(--baja);
 }
+
+/* Lo que el filtro de la taza deja fuera. Va debajo de la lista y en tenue: es
+   una nota al pie, no una alarma —pero tiene que estar, o la cola recortada se
+   lee como si fuera todo lo que hay pendiente. */
+.cola__ocultas {
+  flex: 0 0 auto;
+  margin: 0;
+  padding-top: 2px;
+  color: var(--tenue);
+  font-size: 11px;
+}
+
+/* --- los reportes ----------------------------------------------------- */
+
+.reporte {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  height: 100%;
+  min-height: 0;
+}
+
+.reporte__barra {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.reporte__hueco {
+  flex: 1 1 auto;
+}
+
+.reporte__cuerpo {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  overflow-y: auto;
+  min-height: 0;
+  padding-right: 4px;
+}
+
+.reporte__vacio,
+.reporte__pista {
+  margin: 0;
+  color: var(--tenue);
+  font-size: 12px;
+}
+
+.reporte__bloque h2 {
+  margin: 0 0 8px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--tenue);
+}
+
+/* Cada cifra con su pie. Ningún número va solo: el pie es lo que impide leer
+   un total como si describiera algo que no describe. */
+.cifras {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 8px;
+  margin: 0;
+}
+
+.cifra {
+  padding: 10px 12px;
+  border: 1px solid var(--borde);
+  border-radius: 9px;
+  background: var(--placa);
+}
+
+.cifra dt {
+  color: var(--tenue);
+  font-size: 11px;
+  letter-spacing: 0.03em;
+}
+
+.cifra dd {
+  margin: 2px 0 0;
+  font-size: 22px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+
+.cifra__pie {
+  margin: 3px 0 0;
+  color: var(--tenue);
+  font-size: 11px;
+}
+
+.reparto {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.reparto__fila {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 100px auto;
+  gap: 10px;
+  align-items: center;
+  font-size: 12px;
+}
+
+.reparto__nombre {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.reparto__barra {
+  height: 7px;
+  border-radius: 4px;
+  background: var(--placa);
+  overflow: hidden;
+}
+
+.reparto__barra i {
+  display: block;
+  height: 100%;
+  border-radius: 4px;
+  background: var(--acento);
+}
+
+.reparto__cifra {
+  color: var(--tenue);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.reparto__cifra em {
+  font-style: normal;
+  color: var(--alta);
+}
+
+.estimaciones__frase {
+  margin: 0 0 8px;
+  font-size: 13px;
+}
+
+.estimaciones__desglose {
+  display: flex;
+  gap: 16px;
+  margin: 0 0 10px;
+  padding: 0;
+  list-style: none;
+  color: var(--tenue);
+  font-size: 12px;
+}
+
+.estimaciones__desglose span {
+  color: var(--tinta);
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+}
