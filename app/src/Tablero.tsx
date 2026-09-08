@@ -21,6 +21,7 @@
 
 import { useMemo, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { FiltroProyecto, useConDescendientes } from "./filtro";
 import {
   ETIQUETA_PRIORIDAD,
   type Prioridad,
@@ -53,22 +54,9 @@ export function Tablero({ tareas, proyectos, snap, recargar }: Props) {
   const [componiendo, setComponiendo] = useState(false);
 
   // Filtrar por un proyecto incluye a sus hijos: elegir "personal" y no ver lo
-  // de "personal / labs" sería una jerarquía de adorno.
-  const conDescendientes = useMemo(() => {
-    if (filtro === null) return null;
-    const dentro = new Set<number>([filtro]);
-    let creció = true;
-    while (creció) {
-      creció = false;
-      for (const p of proyectos) {
-        if (p.parent_id !== null && dentro.has(p.parent_id) && !dentro.has(p.id)) {
-          dentro.add(p.id);
-          creció = true;
-        }
-      }
-    }
-    return dentro;
-  }, [filtro, proyectos]);
+  // de "personal / labs" sería una jerarquía de adorno. La regla la lleva
+  // `filtro.tsx` porque la vista de la taza filtra igual.
+  const conDescendientes = useConDescendientes(filtro, proyectos);
 
   const visibles = useMemo(
     () =>
@@ -227,6 +215,19 @@ function Tarjeta({
     recargar();
   }
 
+  // Apartar conserva el historial; borrar no. Son gestos distintos y por eso
+  // este no pide confirmación: lo que hace es reversible con `coffe task reopen`.
+  async function archivar() {
+    try {
+      await invoke("archivar_tarea", { id: tarea.id });
+    } catch (e) {
+      // Archivar la que tiene el reloj encima se rechaza, y el porqué viene
+      // del backend: es la misma regla que usa la CLI.
+      alFallar(String(e));
+    }
+    recargar();
+  }
+
   async function borrar() {
     try {
       await invoke("borrar_tarea", { id: tarea.id, force: false });
@@ -283,6 +284,16 @@ function Tarjeta({
                 {c.corto}
               </button>
             ))}
+            {/* Apartar no es una columna: el bote no se enseña. Pero tenía que
+                estar en algún sitio — hasta ahora la única forma de sacar algo
+                de la vista era borrarlo, y eso pierde el historial. */}
+            <button
+              className="chip chip--tenue"
+              title="ya no se va a hacer. Conserva el historial; no es borrarla"
+              onClick={archivar}
+            >
+              apartar
+            </button>
           </div>
           <Estimador tarea={tarea} recargar={recargar} alFallar={alFallar} />
 
@@ -381,33 +392,7 @@ function Estimador({
   );
 }
 
-// ------------------------------------------------------- filtro y compositor
-
-function FiltroProyecto({
-  proyectos,
-  valor,
-  alCambiar,
-}: {
-  proyectos: Proyecto[];
-  valor: number | null;
-  alCambiar: (v: number | null) => void;
-}) {
-  return (
-    <select
-      className="selector"
-      value={valor ?? ""}
-      onChange={(e) => alCambiar(e.target.value === "" ? null : Number(e.target.value))}
-    >
-      <option value="">Todos los proyectos</option>
-      {proyectos.map((p) => (
-        <option key={p.id} value={p.id}>
-          {/* La sangría es lo que hace que el desplegable se lea como árbol. */}
-          {"  ".repeat(p.nivel) + p.name}
-        </option>
-      ))}
-    </select>
-  );
-}
+// ------------------------------------------------------------- compositor
 
 function Compositor({
   proyectos,
