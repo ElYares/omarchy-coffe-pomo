@@ -122,3 +122,9 @@ convención que ya sigue ese directorio.
 - Señal de waybar reservada para el pomodoro: **RTMIN+15** (7 a 14 ya están en
   uso por otros módulos).
 - Waybar no recarga solo: `omarchy restart waybar`.
+
+## Contexto del proyecto
+
+Estado, decisiones e historia en el vault:
+`~/develop/docs/obsidean-vault-personal/10 Projects/omarchy-coffe-pomo/`
+Cargar con `/contexto`.
