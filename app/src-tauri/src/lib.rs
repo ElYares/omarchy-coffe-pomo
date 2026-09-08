@@ -10,8 +10,10 @@ use anyhow::Result;
 use coffe_core::agenda::{Plan, Vencimiento, planificar_todo};
 use coffe_core::config::Config;
 use coffe_core::db::projects::{NuevoProyecto, Project};
+use coffe_core::db::reportes::{CargaProyecto, Exportacion, Precision, ResumenPeriodo};
 use coffe_core::db::tasks::{CambiosTarea, FiltroTareas, NuevaTarea, Task};
 use coffe_core::model::{InterruptionKind, Priority, TaskState};
+use coffe_core::tablero::{Destino, Escritura, Movida, decidir};
 use coffe_core::vault::{leer_backlog, proyectos_con_backlog};
 use coffe_core::{Db, VoidReason, paths};
 use coffe_ipc::client::{self, Client};
@@ -55,6 +57,25 @@ struct CarpetaVault {
     vivas: u32,
     /// El proyecto que ya la tiene ligada, si hay alguno.
     ligada_a: Option<String>,
+}
+
+/// El reporte entero, de un viaje.
+///
+/// Las tres preguntas se piden juntas porque se leen juntas: un total de
+/// pomodoros sin saber en qué proyectos cayeron ni si tus estimaciones valen
+/// algo es un número de adorno.
+///
+/// Las cuentas derivadas —la tasa de anulación y el factor— van YA CALCULADAS
+/// por el núcleo. Si la ventana las repitiera con su propia aritmética,
+/// tendríamos dos versiones del mismo número esperando a discrepar.
+#[derive(Debug, Clone, Serialize)]
+struct ReporteVista {
+    dias: u32,
+    resumen: ResumenPeriodo,
+    tasa_anulacion: f64,
+    cargas: Vec<CargaProyecto>,
+    precision: Precision,
+    factor: Option<f64>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -302,73 +323,23 @@ enum Columna {
     Done,
 }
 
-/// Lo que hay que hacer para llevar una tarjeta a una columna.
-///
-/// Está separado del comando a propósito: es **la** regla del tablero, y así
-/// se puede comprobar entera sin ventana, sin daemon y sin base.
-#[derive(Debug, Clone, PartialEq, Eq)]
-enum Movida {
-    /// No hay nada que mover.
-    Nada,
-    /// Se lo pedimos al reloj: arrancar, cambiar, aparcar o dar por hecha.
-    AlReloj(Request),
-    /// La tarea no está bajo el reloj; se escribe directo.
-    ALaBase(Escritura),
-    /// La columna no admite esa tarjeta, y hay que decir por qué.
-    Rechazar(&'static str),
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Escritura {
-    Aparcar,
-    Completar,
-    Reabrir,
-}
-
-/// **El estado de una tarea lo manda el reloj, no el tablero.** Si la interfaz
-/// escribiera el estado por su cuenta, soltar una tarjeta en "en curso" dejaría
-/// una tarea marcada como trabajándose sin ningún pomodoro detrás, y las dos
-/// mitades de la aplicación contarían cosas distintas del mismo día.
-///
-/// Así que todo lo que toca al reloj se le pide al daemon, y solo lo que no lo
-/// toca va directo a la base.
-fn decidir(
-    columna: Columna,
-    id: i64,
-    es_la_activa: bool,
-    hay_reloj_corriendo: bool,
-    estado: TaskState,
-) -> Movida {
-    match columna {
-        Columna::InProgress if es_la_activa => Movida::Nada,
-        // Con un pomodoro vivo, empezar otra cosa es un cambio en caliente:
-        // anula el actual y lo deja apuntado como tal. No es lo mismo que
-        // arrancar en frío y el daemon tiene que saberlo.
-        Columna::InProgress if hay_reloj_corriendo => {
-            Movida::AlReloj(Request::Switch { task_id: id })
+impl From<Columna> for Destino {
+    fn from(c: Columna) -> Self {
+        match c {
+            Columna::Pending => Destino::Pendiente,
+            Columna::InProgress => Destino::EnCurso,
+            Columna::Paused => Destino::Refri,
+            Columna::Done => Destino::Hecha,
         }
-        Columna::InProgress => Movida::AlReloj(Request::Start { task_id: id }),
-
-        Columna::Paused if es_la_activa => Movida::AlReloj(Request::Pause),
-        Columna::Paused if estado == TaskState::InProgress => Movida::ALaBase(Escritura::Aparcar),
-        Columna::Paused => Movida::Rechazar("al refri solo va lo que está en curso"),
-
-        // En estricto esto NO calla el pomodoro: la tarea queda hecha y el
-        // reloj sigue hasta sonar. Es la regla, no un descuido.
-        Columna::Done if es_la_activa => Movida::AlReloj(Request::Done),
-        Columna::Done if estado == TaskState::Done => Movida::Nada,
-        Columna::Done => Movida::ALaBase(Escritura::Completar),
-
-        Columna::Pending if es_la_activa => {
-            Movida::Rechazar("está corriendo: apárcala o termínala antes")
-        }
-        Columna::Pending if estado == TaskState::Pending => Movida::Nada,
-        Columna::Pending => Movida::ALaBase(Escritura::Reabrir),
     }
 }
 
-#[tauri::command]
-fn mover_a_columna(estado: State<'_, Estado>, id: i64, columna: Columna) -> Result<(), String> {
+/// Lleva una tarea a un destino, sea cual sea quien lo pida.
+///
+/// La decisión la toma `coffe_core::tablero::decidir`, que es la MISMA que usa
+/// la CLI. Aquí solo se junta el estado del mundo —qué dice el reloj, qué dice
+/// la base— y se ejecuta lo que salga.
+fn llevar(estado: &State<'_, Estado>, id: i64, destino: Destino) -> Result<(), String> {
     let ahora = client::ask(&paths::socket(), &Request::Status).map_err(|e| e.to_string())?;
     let hay_reloj = !ahora.state.is_idle();
     let es_la_activa = hay_reloj && ahora.task.map(|t| t.id) == Some(id);
@@ -376,19 +347,21 @@ fn mover_a_columna(estado: State<'_, Estado>, id: i64, columna: Columna) -> Resu
     let db = estado.db.lock().map_err(|e| e.to_string())?;
     let tarea = db.tarea(id).map_err(|e| e.to_string())?;
 
-    match decidir(columna, id, es_la_activa, hay_reloj, tarea.state) {
+    match decidir(destino, id, es_la_activa, hay_reloj, tarea.state) {
         Movida::Nada => return Ok(()),
         Movida::Rechazar(por_que) => return Err(por_que.into()),
-        Movida::AlReloj(peticion) => {
+        Movida::AlReloj(orden) => {
             drop(db);
-            client::ask(&paths::socket(), &peticion).map_err(|e| e.to_string())?;
+            client::ask(&paths::socket(), &orden.into()).map_err(|e| e.to_string())?;
             return Ok(());
         }
         Movida::ALaBase(escritura) => {
+            let ahora = chrono::Utc::now();
             match escritura {
                 Escritura::Aparcar => db.aparcar(id),
-                Escritura::Completar => db.completar(id, chrono::Utc::now()),
+                Escritura::Completar => db.completar(id, ahora),
                 Escritura::Reabrir => db.reabrir(id),
+                Escritura::Archivar => db.archivar_tarea(id, ahora),
             }
             .map_err(|e| e.to_string())?;
         }
@@ -397,6 +370,20 @@ fn mover_a_columna(estado: State<'_, Estado>, id: i64, columna: Columna) -> Resu
     drop(db);
     avisar_al_reloj();
     Ok(())
+}
+
+#[tauri::command]
+fn mover_a_columna(estado: State<'_, Estado>, id: i64, columna: Columna) -> Result<(), String> {
+    llevar(&estado, id, columna.into())
+}
+
+/// Apartar una tarea: trabajo que ya no se va a hacer. No es una columna del
+/// tablero —el bote no se enseña— pero tenía que existir en algún sitio: hasta
+/// ahora la única forma de sacar algo de la vista era borrarlo, y eso pierde el
+/// historial.
+#[tauri::command]
+fn archivar_tarea(estado: State<'_, Estado>, id: i64) -> Result<(), String> {
+    llevar(&estado, id, Destino::Archivada)
 }
 
 #[tauri::command]
@@ -562,6 +549,53 @@ fn agenda(estado: State<'_, Estado>, dias: u32) -> Result<Plan, String> {
     Ok(planificar_todo(hoy, &vencimientos, sin_estimar, dias.clamp(1, 180), &estado.cfg.agenda))
 }
 
+/// En qué se te fue el tiempo. Es lo mismo que enseña `coffe report`, pintado
+/// en la ventana en vez de en la terminal.
+#[tauri::command]
+fn reporte(estado: State<'_, Estado>, dias: u32) -> Result<ReporteVista, String> {
+    let db = estado.db.lock().map_err(|e| e.to_string())?;
+    let dias = dias.clamp(1, 3650);
+    let hasta = chrono::Utc::now();
+    let desde = hasta - chrono::Duration::days(dias as i64);
+
+    let resumen = db.resumen_periodo(desde, hasta).map_err(|e| e.to_string())?;
+    let cargas = db.carga_por_proyecto(desde, hasta).map_err(|e| e.to_string())?;
+    let precision = db.precision_estimacion().map_err(|e| e.to_string())?;
+
+    Ok(ReporteVista {
+        dias,
+        tasa_anulacion: resumen.tasa_de_anulacion(),
+        factor: precision.factor(),
+        resumen,
+        cargas,
+        precision,
+    })
+}
+
+/// Los mismos CSV que `coffe export`, escritos donde diga el selector del
+/// sistema. El texto lo arma `coffe_core`: la ventana y la terminal tienen que
+/// sacar el mismo archivo o no es una exportación, son dos.
+///
+/// Devuelve cuántas filas fueron. Un archivo de cero filas escrito sin una
+/// queja es la clase de éxito que se descubre tarde.
+#[tauri::command]
+fn exportar_csv(
+    estado: State<'_, Estado>,
+    que: String,
+    dias: u32,
+    destino: String,
+) -> Result<usize, String> {
+    let db = estado.db.lock().map_err(|e| e.to_string())?;
+    let que = match que.as_str() {
+        "pomodoros" => Exportacion::Pomodoros { dias },
+        "tareas" => Exportacion::Tareas,
+        otro => return Err(format!("no sé exportar «{otro}»")),
+    };
+    let (texto, filas) = db.csv(que).map_err(|e| e.to_string())?;
+    std::fs::write(&destino, texto).map_err(|e| format!("no se pudo escribir {destino}: {e}"))?;
+    Ok(filas)
+}
+
 /// La configuración en uso, para que la ventana no tenga que adivinar cuántos
 /// pomodoros caben en un día ni si el modo estricto está puesto.
 #[tauri::command]
@@ -645,6 +679,7 @@ pub fn run() {
             proyectos,
             tareas,
             mover_a_columna,
+            archivar_tarea,
             crear_tarea,
             cambiar_prioridad,
             estimar,
@@ -653,6 +688,8 @@ pub fn run() {
             borrar_tarea,
             vaciar_papelera,
             agenda,
+            reporte,
+            exportar_csv,
             config,
             abrir_nota,
             crear_proyecto,
@@ -668,91 +705,4 @@ pub fn run() {
         ])
         .run(tauri::generate_context!())
         .expect("la ventana no pudo arrancar");
-}
-
-#[cfg(test)]
-mod pruebas {
-    use super::*;
-
-    /// Arrancar es siempre cosa del reloj: el tablero no puede marcar una tarea
-    /// como en curso sin que haya un pomodoro detrás.
-    #[test]
-    fn arrastrar_a_en_curso_siempre_pasa_por_el_reloj() {
-        assert_eq!(
-            decidir(Columna::InProgress, 7, false, false, TaskState::Pending),
-            Movida::AlReloj(Request::Start { task_id: 7 })
-        );
-        assert_eq!(
-            decidir(Columna::InProgress, 7, false, false, TaskState::Paused),
-            Movida::AlReloj(Request::Start { task_id: 7 }),
-            "sacar del refri tambien es arrancar"
-        );
-    }
-
-    #[test]
-    fn con_un_pomodoro_vivo_empezar_otra_cosa_es_un_cambio_en_caliente() {
-        // Un `start` normal dejaria el pomodoro anterior abierto en el aire.
-        assert_eq!(
-            decidir(Columna::InProgress, 9, false, true, TaskState::Pending),
-            Movida::AlReloj(Request::Switch { task_id: 9 })
-        );
-    }
-
-    #[test]
-    fn soltar_la_tarjeta_donde_ya_estaba_no_hace_nada() {
-        assert_eq!(
-            decidir(Columna::InProgress, 1, true, true, TaskState::InProgress),
-            Movida::Nada
-        );
-        assert_eq!(decidir(Columna::Done, 1, false, false, TaskState::Done), Movida::Nada);
-        assert_eq!(decidir(Columna::Pending, 1, false, false, TaskState::Pending), Movida::Nada);
-    }
-
-    #[test]
-    fn aparcar_la_que_esta_corriendo_pasa_por_el_reloj() {
-        assert_eq!(
-            decidir(Columna::Paused, 1, true, true, TaskState::InProgress),
-            Movida::AlReloj(Request::Pause),
-            "hay un pomodoro que anular, y eso no lo puede hacer la base"
-        );
-    }
-
-    #[test]
-    fn al_refri_no_va_lo_que_nunca_empezo() {
-        assert!(matches!(
-            decidir(Columna::Paused, 1, false, false, TaskState::Pending),
-            Movida::Rechazar(_)
-        ));
-        assert!(matches!(
-            decidir(Columna::Paused, 1, false, false, TaskState::Done),
-            Movida::Rechazar(_)
-        ));
-    }
-
-    #[test]
-    fn terminar_la_activa_pasa_por_el_reloj_pero_otra_no() {
-        // En estricto, `Done` sobre la activa NO calla el pomodoro: lo deja
-        // sonar. Por eso tiene que ir al daemon y no a la base.
-        assert_eq!(
-            decidir(Columna::Done, 3, true, true, TaskState::InProgress),
-            Movida::AlReloj(Request::Done)
-        );
-        assert_eq!(
-            decidir(Columna::Done, 4, false, true, TaskState::Pending),
-            Movida::ALaBase(Escritura::Completar),
-            "una tarea que no esta bajo el reloj se cierra directo"
-        );
-    }
-
-    #[test]
-    fn no_se_devuelve_a_pendiente_algo_que_esta_corriendo() {
-        assert!(matches!(
-            decidir(Columna::Pending, 1, true, true, TaskState::InProgress),
-            Movida::Rechazar(_)
-        ));
-        assert_eq!(
-            decidir(Columna::Pending, 1, false, false, TaskState::Done),
-            Movida::ALaBase(Escritura::Reabrir)
-        );
-    }
 }
