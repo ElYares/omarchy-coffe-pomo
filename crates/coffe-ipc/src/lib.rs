@@ -16,6 +16,23 @@ use coffe_core::machine::TimerState;
 use coffe_core::model::{BreakKind, InterruptionKind, Priority, VoidReason};
 use serde::{Deserialize, Serialize};
 
+/// Traduce lo que decidió el tablero a lo que entiende el daemon.
+///
+/// Vive aquí y no en el núcleo porque el núcleo no conoce el protocolo —la
+/// dependencia va en este sentido y no al revés—, y no en cada cliente porque
+/// entonces la ventana y la CLI tendrían cada una su traducción.
+impl From<coffe_core::tablero::OrdenReloj> for Request {
+    fn from(o: coffe_core::tablero::OrdenReloj) -> Self {
+        use coffe_core::tablero::OrdenReloj as O;
+        match o {
+            O::Start { task_id } => Request::Start { task_id },
+            O::Switch { task_id } => Request::Switch { task_id },
+            O::Pause => Request::Pause,
+            O::Done => Request::Done,
+        }
+    }
+}
+
 /// Lo que un cliente le pide al daemon.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "req", rename_all = "snake_case")]

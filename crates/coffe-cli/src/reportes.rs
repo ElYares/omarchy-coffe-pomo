@@ -8,9 +8,7 @@
 use anyhow::Result;
 use chrono::{Duration, Utc};
 use coffe_core::Db;
-use coffe_core::db::reportes::Precision;
-use coffe_core::db::tasks::FiltroTareas;
-use coffe_core::model::TaskState;
+use coffe_core::db::reportes::{Exportacion, Precision};
 
 use crate::ExportCmd;
 
@@ -77,6 +75,9 @@ fn pintar_precision(p: &Precision) {
 
     if p.tareas == 0 {
         println!("  Todavía no hay ninguna tarea terminada CON estimación.");
+        if p.sin_estimar > 0 {
+            println!("  Terminaste {} sin estimar: no hay con qué compararlas.", p.sin_estimar);
+        }
         println!("  Sin eso no hay con qué comparar: estima antes de empezar.");
         return;
     }
@@ -86,6 +87,12 @@ fn pintar_precision(p: &Precision) {
         "  te quedaste corto en {}, clavaste {}, sobró en {}",
         p.subestimadas, p.clavadas, p.sobreestimadas
     );
+    // Lo que la cuenta NO mira. Sin esta línea, un factor sacado de dos tareas
+    // mientras otras treinta se terminaron a ojo se lee como tu forma de
+    // estimar, y es la de dos tareas.
+    if p.sin_estimar > 0 {
+        println!("  ({} terminada(s) sin estimar quedan fuera de esta cuenta)", p.sin_estimar);
+    }
 
     let Some(factor) = p.factor() else { return };
 
@@ -111,79 +118,15 @@ fn pintar_precision(p: &Precision) {
 // ------------------------------------------------------------------- CSV
 
 pub fn exportar(db: &Db, cmd: ExportCmd) -> Result<()> {
-    match cmd {
-        ExportCmd::Pomodoros { dias } => {
-            let hasta = Utc::now();
-            let desde = hasta - Duration::days(dias.clamp(1, 3650) as i64);
-            println!("inicio,fin,resultado,motivo,segundos,estricto,tarea,proyecto");
-
-            for f in db.pomodoros_del_periodo(desde, hasta)? {
-                println!(
-                    "{},{},{},{},{},{},{},{}",
-                    f.started_at,
-                    f.ended_at.unwrap_or_default(),
-                    f.outcome.unwrap_or_default(),
-                    f.void_reason.unwrap_or_default(),
-                    f.planned_secs,
-                    if f.strict { "si" } else { "no" },
-                    csv(&f.titulo),
-                    csv(&f.proyecto),
-                );
-            }
-        }
-
-        ExportCmd::Tareas => {
-            println!(
-                "id,titulo,proyecto,estado,prioridad,entrega,estimados,completados,anulados,\
-                 seg_efectivos,seg_dedicacion,seg_calendario,pausas,interrup_internas,\
-                 interrup_externas,seg_claude,nota"
-            );
-            // Todos los estados, archivadas incluidas: una exportación que se
-            // deja fuera lo archivado pierde justo la historia vieja, que es
-            // para lo que se exporta.
-            let todos = vec![
-                TaskState::Pending,
-                TaskState::InProgress,
-                TaskState::Paused,
-                TaskState::Done,
-                TaskState::Archived,
-            ];
-            for t in db.tareas(&FiltroTareas { states: Some(todos), ..Default::default() })? {
-                let r = db.resumen_tarea(t.id)?;
-                println!(
-                    "{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}",
-                    t.id,
-                    csv(&t.title),
-                    csv(&db.ruta_proyecto(t.project_id).unwrap_or_default()),
-                    t.state.as_str(),
-                    t.priority.as_str(),
-                    t.due_date.unwrap_or_default(),
-                    t.estimate_pomodoros.map(|e| e.to_string()).unwrap_or_default(),
-                    r.pomodoros_completados,
-                    r.pomodoros_anulados,
-                    r.segundos_efectivos,
-                    r.segundos_en_tramos,
-                    r.segundos_calendario.map(|s| s.to_string()).unwrap_or_default(),
-                    r.veces_aparcada,
-                    r.interrupciones_internas,
-                    r.interrupciones_externas,
-                    r.segundos_con_claude,
-                    csv(&t.vault_note.unwrap_or_default()),
-                );
-            }
-        }
-    }
+    // El texto lo arma `coffe_core`, que es quien lo tiene probado y quien se
+    // lo da también a la ventana. Aquí solo se decide dónde va a parar.
+    let que = match cmd {
+        ExportCmd::Pomodoros { dias } => Exportacion::Pomodoros { dias },
+        ExportCmd::Tareas => Exportacion::Tareas,
+    };
+    let (texto, _filas) = db.csv(que)?;
+    print!("{texto}");
     Ok(())
-}
-
-/// Un campo CSV. Los títulos llevan comas y comillas más a menudo de lo que
-/// parece, y una sola sin escapar corre todas las columnas de esa fila.
-fn csv(s: &str) -> String {
-    if s.contains([',', '"', '\n']) {
-        format!("\"{}\"", s.replace('"', "\"\""))
-    } else {
-        s.to_string()
-    }
 }
 
 // ------------------------------------------------------------------ pinta

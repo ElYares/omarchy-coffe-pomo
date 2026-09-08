@@ -201,6 +201,35 @@ fn sin_estimacion_no_hay_nada_que_comparar() {
 }
 
 #[test]
+fn la_precision_dice_cuantas_terminadas_se_deja_fuera() {
+    // Una precisión calculada sobre una tarea, mientras otras tres se
+    // terminaron sin estimar, no describe cómo estimas: describe esa tarea.
+    // Callar las tres la haría pasar por un retrato.
+    let db = Db::en_memoria().unwrap();
+    let p = proyecto(&db, None, "strapp");
+
+    let medida = tarea(&db, p, "medida", Some(2));
+    suena(&db, medida, t0());
+    suena(&db, medida, t0() + Duration::hours(1));
+    db.completar(medida, t0() + Duration::hours(2)).unwrap();
+
+    for i in 0..3 {
+        let t = tarea(&db, p, &format!("a ojo {i}"), None);
+        suena(&db, t, t0() + Duration::days(1) + Duration::hours(i));
+        db.completar(t, t0() + Duration::days(1) + Duration::hours(i + 1)).unwrap();
+    }
+
+    let r = db.precision_estimacion().unwrap();
+    assert_eq!(r.tareas, 1, "solo la estimada entra en la comparación");
+    assert_eq!(r.sin_estimar, 3, "y las otras tres se cuentan aparte, no se tragan");
+
+    // Una a medias sin estimar tampoco: todavía no ha terminado.
+    let viva = tarea(&db, p, "a medias", None);
+    suena(&db, viva, t0() + Duration::days(2));
+    assert_eq!(db.precision_estimacion().unwrap().sin_estimar, 3);
+}
+
+#[test]
 fn las_interrupciones_y_el_tiempo_con_claude_entran_en_el_resumen() {
     let db = Db::en_memoria().unwrap();
     let p = proyecto(&db, None, "strapp");
