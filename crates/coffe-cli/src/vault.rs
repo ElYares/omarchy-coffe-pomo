@@ -28,25 +28,13 @@ pub fn ejecutar(db: &Db, cfg: &Config, cmd: VaultCmd) -> Result<()> {
 }
 
 fn raiz_del_vault(cfg: &Config) -> Result<PathBuf> {
-    if cfg.vault.path.trim().is_empty() {
-        anyhow::bail!(
-            "no hay vault configurado. Pon su ruta en {}:\n\n  [vault]\n  path = \"~/develop/docs/mi-vault\"",
+    cfg.vault_raiz().with_context(|| {
+        format!(
+            "no hay vault configurado (o la ruta no existe). Ponlo en {}:\n\n  \
+             [vault]\n  path = \"~/develop/docs/mi-vault\"",
             coffe_core::paths::config().display()
-        );
-    }
-    let expandida = expandir(&cfg.vault.path);
-    if !expandida.is_dir() {
-        anyhow::bail!("el vault {} no existe", expandida.display());
-    }
-    Ok(expandida)
-}
-
-/// `~/...` a mano: traerse una dependencia entera para un carácter no compensa.
-fn expandir(ruta: &str) -> PathBuf {
-    match ruta.strip_prefix("~/") {
-        Some(resto) => PathBuf::from(std::env::var("HOME").unwrap_or_default()).join(resto),
-        None => PathBuf::from(ruta),
-    }
+        )
+    })
 }
 
 // ------------------------------------------------------------------ scan

@@ -244,6 +244,15 @@ tendencia, porque callarlo invitaría a creérselo.
 
 ## Después
 
+### Hecho fuera de fase
+
+- **La vista de proyectos** (`Ctrl+4`). Se dejó fuera de la Fase 5 para no
+  alargarla y **no se comunicó**, así que el usuario acabó montando el árbol a
+  base de comandos sin saber que no había otra forma. Gestionar los proyectos
+  es tan parte de «una app visual» como el tablero.
+
+### Pendiente
+
 Lo que queda fuera de las ocho fases, apuntado para no perderlo:
 
 - **Los otros cuatro temas de waybar.** El módulo está en `nordfjell`;

@@ -70,6 +70,29 @@ export interface Proyecto {
   ruta: string;
   nivel: number;
   archived: boolean;
+  /** La carpeta del repo. Es lo que reconoce el proyecto por el directorio. */
+  repo_path: string | null;
+  /** La carpeta dentro del vault de Obsidian. */
+  vault_path: string | null;
+}
+
+/** Una carpeta del vault con Backlog. */
+export interface CarpetaVault {
+  nombre: string;
+  /** Historias que son trabajo pendiente. */
+  vivas: number;
+  /** El proyecto que ya la tiene ligada, si hay alguno. */
+  ligada_a: string | null;
+}
+
+/** El parte de una importación. */
+export interface Importacion {
+  creadas: number;
+  actualizadas: number;
+  omitidas: number;
+  sin_prioridad: string[];
+  estados_raros: [string, string][];
+  prioridad_congelada: string[];
 }
 
 export interface Tema {

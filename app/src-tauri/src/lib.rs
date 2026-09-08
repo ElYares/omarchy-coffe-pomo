@@ -9,9 +9,10 @@ mod tema;
 use anyhow::Result;
 use coffe_core::agenda::{Plan, Vencimiento, planificar_todo};
 use coffe_core::config::Config;
-use coffe_core::db::projects::Project;
+use coffe_core::db::projects::{NuevoProyecto, Project};
 use coffe_core::db::tasks::{CambiosTarea, FiltroTareas, NuevaTarea, Task};
 use coffe_core::model::{InterruptionKind, Priority, TaskState};
+use coffe_core::vault::{leer_backlog, proyectos_con_backlog};
 use coffe_core::{Db, VoidReason, paths};
 use coffe_ipc::client::{self, Client};
 use coffe_ipc::{Request, Snapshot};
@@ -42,6 +43,18 @@ struct ProyectoVista {
     proyecto: Project,
     ruta: String,
     nivel: usize,
+}
+
+/// Una carpeta del vault con Backlog, para poder elegirla de una lista en vez
+/// de teclear su nombre.
+#[derive(Debug, Clone, Serialize)]
+struct CarpetaVault {
+    nombre: String,
+    /// Historias que son trabajo pendiente. Cero significa que no hay nada que
+    /// traerse, y eso conviene verlo ANTES de ligar.
+    vivas: u32,
+    /// El proyecto que ya la tiene ligada, si hay alguno.
+    ligada_a: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -128,6 +141,141 @@ fn tareas(estado: State<'_, Estado>) -> Result<Vec<TareaVista>, String> {
             tarea: t,
         })
         .collect())
+}
+
+// ------------------------------------------------------ los proyectos
+
+#[tauri::command]
+fn crear_proyecto(
+    estado: State<'_, Estado>,
+    nombre: String,
+    parent_id: Option<i64>,
+) -> Result<i64, String> {
+    let db = estado.db.lock().map_err(|e| e.to_string())?;
+    db.crear_proyecto(
+        NuevoProyecto { parent_id, name: nombre, repo_path: None, vault_path: None },
+        chrono::Utc::now(),
+    )
+    .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn renombrar_proyecto(estado: State<'_, Estado>, id: i64, nombre: String) -> Result<(), String> {
+    let db = estado.db.lock().map_err(|e| e.to_string())?;
+    db.renombrar_proyecto(id, &nombre).map_err(|e| e.to_string())
+}
+
+/// Lo cuelga de otro padre, o de la raíz con `null`.
+///
+/// El núcleo se niega a colgarlo de su propio descendiente: eso partiría el
+/// árbol en dos y el subárbol no se podría volver a alcanzar.
+#[tauri::command]
+fn mover_proyecto(
+    estado: State<'_, Estado>,
+    id: i64,
+    parent_id: Option<i64>,
+) -> Result<(), String> {
+    let db = estado.db.lock().map_err(|e| e.to_string())?;
+    db.mover_proyecto(id, parent_id).map_err(|e| e.to_string())
+}
+
+/// La carpeta del repo. Se guarda **absoluta**: se compara contra el directorio
+/// de otra sesión, que puede estar en cualquier sitio.
+#[tauri::command]
+fn fijar_repo(estado: State<'_, Estado>, id: i64, ruta: Option<String>) -> Result<(), String> {
+    let db = estado.db.lock().map_err(|e| e.to_string())?;
+    let absoluta = match ruta.filter(|r| !r.trim().is_empty()) {
+        Some(r) => Some(
+            std::fs::canonicalize(&r)
+                .map_err(|_| format!("no existe la carpeta {r}"))?
+                .display()
+                .to_string(),
+        ),
+        None => None,
+    };
+    db.fijar_repo(id, absoluta.as_deref()).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn fijar_vault(estado: State<'_, Estado>, id: i64, carpeta: Option<String>) -> Result<(), String> {
+    let db = estado.db.lock().map_err(|e| e.to_string())?;
+    db.fijar_vault(id, carpeta.filter(|c| !c.trim().is_empty()).as_deref())
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn archivar_proyecto(estado: State<'_, Estado>, id: i64, archivado: bool) -> Result<u32, String> {
+    let db = estado.db.lock().map_err(|e| e.to_string())?;
+    db.archivar_proyecto(id, archivado).map_err(|e| e.to_string())
+}
+
+/// Cuántos subproyectos y tareas cuelgan de él. Es lo que hay que enseñar antes
+/// de dejar borrar: el esquema borra en cascada y con las tareas se va su
+/// tiempo medido, que es lo único que esto no puede reconstruir.
+#[tauri::command]
+fn contenido_proyecto(estado: State<'_, Estado>, id: i64) -> Result<(u32, u32), String> {
+    let db = estado.db.lock().map_err(|e| e.to_string())?;
+    db.contenido_proyecto(id).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn borrar_proyecto(estado: State<'_, Estado>, id: i64, force: bool) -> Result<(), String> {
+    let db = estado.db.lock().map_err(|e| e.to_string())?;
+    db.borrar_proyecto(id, force).map_err(|e| e.to_string())?;
+    drop(db);
+    avisar_al_reloj();
+    Ok(())
+}
+
+/// Las carpetas del vault que tienen Backlog, con cuántas historias vivas hay.
+#[tauri::command]
+fn carpetas_vault(estado: State<'_, Estado>) -> Result<Vec<CarpetaVault>, String> {
+    let Some(raiz) = estado.cfg.vault_raiz() else { return Ok(Vec::new()) };
+    let dir = &estado.cfg.vault.projects_dir;
+    let nombres = proyectos_con_backlog(&raiz, dir).map_err(|e| e.to_string())?;
+
+    let db = estado.db.lock().map_err(|e| e.to_string())?;
+    nombres
+        .into_iter()
+        .map(|nombre| {
+            let notas = leer_backlog(&raiz, dir, &nombre).map_err(|e| e.to_string())?;
+            let ligada = db.proyecto_por_vault(&nombre).map_err(|e| e.to_string())?;
+            Ok(CarpetaVault {
+                vivas: notas.iter().filter(|n| !n.nota.terminal).count() as u32,
+                ligada_a: match ligada {
+                    Some(p) => Some(db.ruta_proyecto(p.id).map_err(|e| e.to_string())?),
+                    None => None,
+                },
+                nombre,
+            })
+        })
+        .collect()
+}
+
+/// Trae el backlog de un proyecto ya ligado. Devuelve el parte de lo que pasó,
+/// incluidas las rarezas: un importador que se traga lo que no entiende pierde
+/// trabajo sin que nadie se entere hasta meses después.
+#[tauri::command]
+fn importar_vault(
+    estado: State<'_, Estado>,
+    id: i64,
+) -> Result<coffe_core::db::tasks::Importacion, String> {
+    let Some(raiz) = estado.cfg.vault_raiz() else {
+        return Err("no hay vault configurado en config.toml".into());
+    };
+    let db = estado.db.lock().map_err(|e| e.to_string())?;
+    let p = db.proyecto(id).map_err(|e| e.to_string())?;
+    let Some(carpeta) = p.vault_path else {
+        return Err("este proyecto no está ligado a ninguna carpeta del vault".into());
+    };
+
+    let notas =
+        leer_backlog(&raiz, &estado.cfg.vault.projects_dir, &carpeta).map_err(|e| e.to_string())?;
+    let r =
+        db.sincronizar_notas(id, &notas, false, chrono::Utc::now()).map_err(|e| e.to_string())?;
+    drop(db);
+    avisar_al_reloj();
+    Ok(r)
 }
 
 fn profundidad(todos: &[Project], p: &Project) -> usize {
@@ -478,6 +626,10 @@ fn seguir_al_tema(app: AppHandle) {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        // Elegir la carpeta de un repo se hace con el selector del sistema. Que
+        // una interfaz gráfica te pida teclear una ruta absoluta es justo lo
+        // que no debería pasar.
+        .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
             let db = Db::open(&paths::database())?;
             let cfg = Config::load(&paths::config())?;
@@ -502,7 +654,17 @@ pub fn run() {
             vaciar_papelera,
             agenda,
             config,
-            abrir_nota
+            abrir_nota,
+            crear_proyecto,
+            renombrar_proyecto,
+            mover_proyecto,
+            fijar_repo,
+            fijar_vault,
+            archivar_proyecto,
+            contenido_proyecto,
+            borrar_proyecto,
+            carpetas_vault,
+            importar_vault
         ])
         .run(tauri::generate_context!())
         .expect("la ventana no pudo arrancar");

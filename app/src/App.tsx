@@ -1,19 +1,21 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Calendario } from "./Calendario";
+import { Proyectos } from "./Proyectos";
 import { Tablero } from "./Tablero";
 import { Taza, type EstadoTaza } from "./Taza";
 import { useReloj, useTareas, useTema } from "./reloj";
 import { ETIQUETA_PRIORIDAD, reloj, type Snapshot, type Tarea } from "./tipos";
 
-type Vista = "taza" | "tablero" | "calendario";
+type Vista = "taza" | "tablero" | "calendario" | "proyectos";
 
 /** La ventana reabre donde se dejó. Es una preferencia, no un dato: si el
  *  navegador no deja leerla, se arranca en la taza y ya. */
-const VISTAS: Vista[] = ["taza", "tablero", "calendario"];
+const VISTAS: Vista[] = ["taza", "tablero", "calendario", "proyectos"];
 const NOMBRE_VISTA: Record<Vista, string> = {
   taza: "Taza",
   tablero: "Tablero",
   calendario: "Calendario",
+  proyectos: "Proyectos",
 };
 
 const vistaGuardada: Vista = (() => {
@@ -115,7 +117,7 @@ export default function App() {
         <main className="principal principal--tablero">
           <Tablero tareas={tareas} proyectos={proyectos} snap={snap} recargar={recargar} />
         </main>
-      ) : (
+      ) : vista === "calendario" ? (
         <main className="principal principal--tablero">
           <Calendario
             tareas={tareas}
@@ -123,6 +125,10 @@ export default function App() {
             // el tablero es donde se hace algo al respecto.
             alElegir={() => irA("tablero")}
           />
+        </main>
+      ) : (
+        <main className="principal principal--tablero">
+          <Proyectos proyectos={proyectos} tareas={tareas} recargar={recargar} />
         </main>
       )}
 

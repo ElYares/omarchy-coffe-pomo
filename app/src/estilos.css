@@ -501,6 +501,30 @@ body {
   font-size: 13px;
 }
 
+/* Sin esto WebKit pinta el desplegable con el estilo del sistema —fondo blanco—
+   y se come el `background` de arriba: en un tema oscuro queda un rectángulo
+   claro en medio. La flecha hay que dibujarla porque `appearance: none` se
+   lleva también la suya. */
+.selector {
+  appearance: none;
+  padding-right: 26px;
+  background-image: linear-gradient(45deg, transparent 50%, currentColor 50%),
+    linear-gradient(135deg, currentColor 50%, transparent 50%);
+  background-position:
+    right 13px top 55%,
+    right 8px top 55%;
+  background-size: 5px 5px;
+  background-repeat: no-repeat;
+  cursor: pointer;
+}
+
+/* La lista desplegada la pinta el sistema y no hereda del `select`: hay que
+   darle color a las opciones o salen negras sobre negro. */
+.selector option {
+  background: var(--fondo);
+  color: var(--tinta);
+}
+
 .campo--ancho {
   flex: 1 1 auto;
   min-width: 0;
@@ -1056,4 +1080,152 @@ body {
 
 .tarjeta__mover .chip {
   flex: 1;
+}
+
+/* --- el árbol de proyectos --------------------------------------------- */
+
+.proyectos {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  height: 100%;
+  min-height: 0;
+}
+
+.proyectos__barra {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.proyectos__pista,
+.proyectos__vacio {
+  color: var(--tenue);
+  font-size: 13px;
+}
+
+.arbol {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.arbol__fila {
+  border: 1px solid transparent;
+  border-radius: 8px;
+}
+
+.arbol__fila--archivado {
+  opacity: 0.5;
+}
+
+.arbol__cabeza {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  width: 100%;
+  padding: 7px 10px;
+  border: none;
+  border-radius: 8px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.arbol__cabeza:hover {
+  background: var(--placa);
+}
+
+.arbol__nombre {
+  font-size: 13px;
+}
+
+.arbol__marcas {
+  display: flex;
+  gap: 4px;
+}
+
+/* Dos puntos: uno dice que el proyecto se reconoce por el directorio, el otro
+   que su backlog vive en el vault. De un vistazo se ve cuál está inerte. */
+.marca {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}
+
+.marca--repo {
+  background: var(--baja);
+}
+
+.marca--vault {
+  background: var(--media);
+}
+
+.arbol__cuenta {
+  margin-left: auto;
+  color: var(--tenue);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.arbol__reverso {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 4px 10px 12px;
+}
+
+.campo-fila {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  font-size: 12px;
+}
+
+.campo-fila > span:first-child {
+  flex: 0 0 62px;
+  color: var(--tenue);
+}
+
+.campo-fila__valor {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--tenue);
+  font-size: 11px;
+}
+
+.arbol__acciones {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  margin-top: 4px;
+}
+
+.arbol__confirmar {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  color: var(--alta);
+  font-size: 12px;
+}
+
+.boton--peligro {
+  border-color: color-mix(in srgb, var(--alta) 55%, transparent);
+  color: var(--alta);
+}
+
+.aviso--bueno {
+  border-left-color: var(--baja);
 }

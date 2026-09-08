@@ -93,6 +93,15 @@ sin esa línea, tampoco hay drop. Las dos cosas juntas, o no funciona.
 
 `tauri.conf.json` es **JSON estricto**: un comentario lo rompe.
 
+**Los `<select>` necesitan `appearance: none`.** Sin eso WebKit los pinta con el
+estilo del sistema —fondo blanco— y se come el `background` del CSS: en un tema
+oscuro queda un rectángulo claro en medio. Las `option` van aparte, porque la
+lista desplegada la pinta el sistema y no hereda del `select`.
+
+**Si una operación existe en la CLI y no en la ventana, hay que decirlo.** La
+gestión de proyectos se quedó fuera de la ventana durante cuatro fases sin que
+nadie lo supiera, y eso convirtió «una app visual» en una app visual a medias.
+
 **Tauri v2 exige `capabilities/default.json`.** Sin `core:event:allow-listen`
 la ventana arranca, pinta y responde a `invoke`, pero no recibe un solo evento:
 se queda congelada en el primer estado, sin error visible. El aviso solo sale

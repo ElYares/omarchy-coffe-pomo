@@ -34,6 +34,20 @@ escribiera, quedaría una tarea marcada como trabajándose sin nada detrás.
 Las prioridades se congelan con el primer pomodoro, y no se descongelan
 devolviendo la tarjeta a pendiente.
 
+## Los proyectos
+
+![El árbol de proyectos](docs/capturas/proyectos.png)
+
+El árbol se monta desde la ventana: crear, renombrar, colgar de otro padre, y
+las dos cosas que hacen que un proyecto **trabaje** en vez de solo existir — la
+carpeta de su repo, que es lo que lo reconoce por el directorio en el que estás,
+y su carpeta del vault, de donde se importa el backlog. Los dos puntitos de cada
+fila dicen de un vistazo cuál de las dos le falta.
+
+Los reportes suman hacia arriba: preguntar por `strapp` cuenta también lo de
+`strapp / tl-mas`. Por eso la regla para decidir la profundidad es que un nodo
+merece existir si alguna vez vas a preguntar *«¿cuánto tiempo se me fue aquí?»*.
+
 ## El calendario
 
 ![El calendario, con el veredicto arriba](docs/capturas/calendario.png)

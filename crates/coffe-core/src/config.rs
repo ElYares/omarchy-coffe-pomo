@@ -75,6 +75,23 @@ impl Default for Vault {
 }
 
 impl Config {
+    /// La raíz del vault, con el `~` ya resuelto. `None` si no hay vault
+    /// configurado o si la ruta no existe.
+    ///
+    /// El `~` se expande a mano: traerse una dependencia entera por un carácter
+    /// no compensa, y es el único que aparece en una ruta escrita a mano.
+    pub fn vault_raiz(&self) -> Option<std::path::PathBuf> {
+        let bruta = self.vault.path.trim();
+        if bruta.is_empty() {
+            return None;
+        }
+        let ruta = match bruta.strip_prefix("~/") {
+            Some(resto) => std::path::PathBuf::from(std::env::var("HOME").ok()?).join(resto),
+            None => std::path::PathBuf::from(bruta),
+        };
+        ruta.is_dir().then_some(ruta)
+    }
+
     /// Lee la configuración. Un archivo ausente no es un error: se usan los
     /// valores por defecto, que son los del método clásico.
     pub fn load(path: &Path) -> Result<Self, ConfigError> {
