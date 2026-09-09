@@ -432,3 +432,67 @@ fn un_tramo_abandonado_no_cuenta_para_siempre() {
         "se cierra donde empezó: no sabemos cuánto duró, así que no inventamos"
     );
 }
+
+// ------------------------------------------------------ leer el cuerpo
+
+/// Un vault de mentira con una nota dentro. Misma convencion que el resto de
+/// las pruebas que tocan disco: `temp_dir` + el pid, y se limpia a mano.
+fn vault_con(marca: &str, nombre: &str, contenido: &str) -> std::path::PathBuf {
+    let dir = std::env::temp_dir().join(format!("coffe-nota-{marca}-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    let backlog = dir.join("10 Projects/demo/Backlog");
+    std::fs::create_dir_all(&backlog).unwrap();
+    std::fs::write(backlog.join(nombre), contenido).unwrap();
+    dir
+}
+
+#[test]
+fn el_cuerpo_de_la_nota_llega_sin_el_frontmatter() {
+    // El frontmatter ya se leyo al importar. Repetirselo al usuario en crudo
+    // seria ensenar la tuberia en vez del contenido.
+    let dir = vault_con(
+        "fm",
+        "demo - HU-001 - Una historia.md",
+        "---\ntype: historia\nid: HU-001\n---\n\n# Una historia\n\n## Objetivo\n\nQue se lea.\n",
+    );
+
+    let c = coffe_core::vault::leer_nota(
+        &dir,
+        "10 Projects/demo/Backlog/demo - HU-001 - Una historia.md",
+    )
+    .unwrap();
+
+    assert!(c.texto.starts_with("# Una historia"), "empieza por el cuerpo: {:?}", c.texto);
+    assert!(!c.texto.contains("type: historia"), "el frontmatter no viaja");
+    assert!(c.texto.contains("Que se lea."));
+
+    std::fs::remove_dir_all(&dir).unwrap();
+}
+
+#[test]
+fn una_nota_sin_frontmatter_se_lee_entera() {
+    let dir = vault_con("suelta", "suelta.md", "# Sin cabecera\n\nTexto.\n");
+    let c = coffe_core::vault::leer_nota(&dir, "10 Projects/demo/Backlog/suelta.md").unwrap();
+    assert!(c.texto.starts_with("# Sin cabecera"));
+    std::fs::remove_dir_all(&dir).unwrap();
+}
+
+#[test]
+fn una_ruta_que_se_sale_del_vault_se_rechaza() {
+    // La ruta la escribe el importador, pero si algun dia se edita a mano, un
+    // visor de notas no puede convertirse en un lector de todo el disco.
+    let dir = vault_con("fuga", "x.md", "hola");
+    std::fs::write(dir.join("secreto.txt"), "no me leas").unwrap();
+
+    let r = coffe_core::vault::leer_nota(&dir, "10 Projects/demo/Backlog/../../../../secreto.txt");
+    assert!(r.is_err(), "una ruta con .. que escapa del vault tiene que fallar");
+
+    std::fs::remove_dir_all(&dir).unwrap();
+}
+
+#[test]
+fn una_nota_que_no_existe_no_revienta() {
+    let dir = vault_con("fantasma", "x.md", "hola");
+    assert!(coffe_core::vault::leer_nota(&dir, "10 Projects/demo/Backlog/fantasma.md").is_err());
+    std::fs::remove_dir_all(&dir).unwrap();
+}

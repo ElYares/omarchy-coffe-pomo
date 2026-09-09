@@ -218,3 +218,54 @@ pub fn leer_backlog(
     halladas.sort_by(|a, b| a.nota.id.cmp(&b.nota.id));
     Ok(halladas)
 }
+
+// ------------------------------------------------------------ leer el cuerpo
+
+/// El cuerpo de una nota, ya sin frontmatter.
+///
+/// El frontmatter es para la máquina —`status`, `id`, `pomodoros`— y ya se leyó
+/// al importar. Enseñárselo al usuario sería repetir en crudo lo que la tarjeta
+/// ya pinta bonito.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Cuerpo {
+    /// Markdown tal cual, sin el bloque `---`.
+    pub texto: String,
+    /// La ruta relativa, para poder decir de dónde salió esto.
+    pub ruta: String,
+}
+
+/// Lee una nota del vault a partir de su ruta **relativa** a la raíz.
+///
+/// La ruta viene de la base, escrita por el importador, pero se comprueba igual
+/// que no se salga del vault: una nota con `../../..` dentro convertiría un
+/// visor de notas en un lector de cualquier archivo del disco. Es barato
+/// comprobarlo y el día que alguien edite esa columna a mano ya está hecho.
+pub fn leer_nota(raiz: &Path, relativa: &str) -> Result<Cuerpo, VaultError> {
+    if relativa.is_empty() {
+        return Err(VaultError::SinCarpeta(String::from("(ruta vacía)")));
+    }
+
+    let completa = raiz.join(relativa);
+    // `canonicalize` resuelve `..` y los enlaces, que es justo lo que hay que
+    // resolver ANTES de comparar: comparar las cadenas sin resolver deja pasar
+    // `Backlog/../../../.ssh/id_rsa`.
+    let (Ok(real), Ok(base)) = (completa.canonicalize(), raiz.canonicalize()) else {
+        return Err(VaultError::SinCarpeta(completa.display().to_string()));
+    };
+    if !real.starts_with(&base) {
+        return Err(VaultError::SinCarpeta(format!("{relativa} se sale del vault")));
+    }
+
+    let texto = std::fs::read_to_string(&real)
+        .map_err(|e| VaultError::Lectura { ruta: real.display().to_string(), fuente: e })?;
+
+    Ok(Cuerpo { texto: sin_frontmatter(&texto).to_string(), ruta: relativa.to_string() })
+}
+
+/// Quita el bloque `---` de cabecera. Si no lo hay, devuelve todo: una nota sin
+/// frontmatter sigue siendo una nota que se puede leer.
+fn sin_frontmatter(contenido: &str) -> &str {
+    let Some(resto) = contenido.strip_prefix("---") else { return contenido };
+    let Some(fin) = resto.find("\n---") else { return contenido };
+    resto[fin + 4..].trim_start_matches(['\r', '\n'])
+}
