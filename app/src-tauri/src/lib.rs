@@ -14,6 +14,7 @@ use coffe_core::db::reportes::{CargaProyecto, Exportacion, Precision, ResumenPer
 use coffe_core::db::tasks::{CambiosTarea, FiltroTareas, NuevaTarea, Task};
 use coffe_core::model::{InterruptionKind, Priority, TaskState};
 use coffe_core::tablero::{Destino, Escritura, Movida, decidir};
+use coffe_core::vault::Cuerpo;
 use coffe_core::vault::{leer_backlog, proyectos_con_backlog};
 use coffe_core::{Db, VoidReason, paths};
 use coffe_ipc::client::{self, Client};
@@ -434,6 +435,22 @@ fn estimar(estado: State<'_, Estado>, id: i64, pomodoros: Option<u32>) -> Result
         .map_err(|e| e.to_string())
 }
 
+/// Pone o quita la fecha de entrega.
+///
+/// Mismo trato que `estimar`, y por la misma razon: el parametro siempre viene,
+/// asi que `null` solo puede significar borrar. Con `Option<Option<String>>` no
+/// se podria —serde convierte `null` en `None`, que aqui significa "no toques
+/// nada"— y el boton de quitar la fecha fallaria sin decir nada.
+///
+/// Sin fecha una tarea no existe para el calendario, asi que esto es lo que
+/// decide si entra en la cuenta de "me cabe" o se queda solo en el tablero.
+#[tauri::command]
+fn fijar_entrega(estado: State<'_, Estado>, id: i64, fecha: Option<String>) -> Result<(), String> {
+    let db = estado.db.lock().map_err(|e| e.to_string())?;
+    db.editar_tarea(id, &CambiosTarea { due_date: Some(fecha), ..Default::default() })
+        .map_err(|e| e.to_string())
+}
+
 #[tauri::command]
 fn editar_tarea(
     estado: State<'_, Estado>,
@@ -478,6 +495,27 @@ fn vaciar_papelera(estado: State<'_, Estado>) -> Result<usize, String> {
 /// Se usa el esquema `obsidian://` y no `xdg-open` sobre el archivo: abrir el
 /// `.md` con el editor por defecto te saca del vault y pierdes los enlaces, que
 /// es justo lo que hace útil a la nota.
+/// El cuerpo de la nota del vault, para leerla sin salir de la ventana.
+///
+/// Solo lee. Editar la nota sigue siendo cosa de Obsidian —"Abrir la nota"
+/// sigue ahi— porque una nota del vault es la fuente y este es un visor: dos
+/// editores sobre el mismo archivo se pisan, y el que pierde es el que no
+/// estaba mirando.
+#[tauri::command]
+fn leer_nota(estado: State<'_, Estado>, id: i64) -> Result<Cuerpo, String> {
+    let db = estado.db.lock().map_err(|e| e.to_string())?;
+    let tarea = db.tarea(id).map_err(|e| e.to_string())?;
+    let Some(nota) = tarea.vault_note else {
+        return Err("esta tarea no vino del vault".into());
+    };
+    // `vault_raiz()` y no `cfg.vault.path` a secas: el path del config lleva `~`
+    // y `Path::new("~/...")` es una carpeta llamada "~", que no existe.
+    let Some(raiz) = estado.cfg.vault_raiz() else {
+        return Err("no hay vault configurado".into());
+    };
+    coffe_core::vault::leer_nota(&raiz, &nota).map_err(|e| e.to_string())
+}
+
 #[tauri::command]
 fn abrir_nota(estado: State<'_, Estado>, id: i64) -> Result<(), String> {
     let db = estado.db.lock().map_err(|e| e.to_string())?;
@@ -683,6 +721,7 @@ pub fn run() {
             crear_tarea,
             cambiar_prioridad,
             estimar,
+            fijar_entrega,
             editar_tarea,
             mover_de_proyecto,
             borrar_tarea,
@@ -692,6 +731,7 @@ pub fn run() {
             exportar_csv,
             config,
             abrir_nota,
+            leer_nota,
             crear_proyecto,
             renombrar_proyecto,
             mover_proyecto,

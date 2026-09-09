@@ -19,9 +19,10 @@
 // El id de la tarjeta viaja DENTRO del dataTransfer y no solo en el estado de
 // React: es el dato que el navegador garantiza que llega al drop.
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { FiltroProyecto, useConDescendientes } from "./filtro";
+import { Nota } from "./Nota";
 import {
   ETIQUETA_PRIORIDAD,
   type Prioridad,
@@ -52,6 +53,9 @@ export function Tablero({ tareas, proyectos, snap, recargar }: Props) {
   const [encima, setEncima] = useState<Columna | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [componiendo, setComponiendo] = useState(false);
+  // Que nota se esta leyendo. Vive aqui y no en la tarjeta porque el panel es
+  // del tablero: solo se lee una a la vez, y abrir otra sustituye a la de antes.
+  const [leyendo, setLeyendo] = useState<number | null>(null);
 
   // Filtrar por un proyecto incluye a sus hijos: elegir "personal" y no ver lo
   // de "personal / labs" sería una jerarquía de adorno. La regla la lleva
@@ -129,6 +133,7 @@ export function Tablero({ tareas, proyectos, snap, recargar }: Props) {
         </p>
       )}
 
+      <div className={`tablero__cuerpo${leyendo !== null ? " tablero__cuerpo--con-nota" : ""}`}>
       <div className="columnas">
         {COLUMNAS.map((col) => {
           const suyas = visibles.filter((t) => t.state === col.id);
@@ -165,12 +170,22 @@ export function Tablero({ tareas, proyectos, snap, recargar }: Props) {
                     recargar={recargar}
                     alFallar={setError}
                     alMover={(columna) => mover(t.id, columna)}
+                    alLeer={t.vault_note === null ? null : () => setLeyendo(t.id)}
                   />
                 ))}
               </ul>
             </section>
           );
         })}
+      </div>
+
+      {/* La nota se cierra sola si la tarea deja de estar a la vista: un panel
+          leyendo algo que el filtro ya escondio confunde mas de lo que sirve. */}
+      {leyendo !== null && (() => {
+        const t = visibles.find((v) => v.id === leyendo);
+        if (!t) return null;
+        return <Nota tareaId={t.id} titulo={t.title} alCerrar={() => setLeyendo(null)} />;
+      })()}
       </div>
     </div>
   );
@@ -186,6 +201,7 @@ function Tarjeta({
   recargar,
   alFallar,
   alMover,
+  alLeer,
 }: {
   tarea: Tarea;
   activa: boolean;
@@ -194,6 +210,8 @@ function Tarjeta({
   recargar: () => void;
   alFallar: (e: string) => void;
   alMover: (columna: Columna) => void;
+  /** `null` cuando la tarea no vino del vault: entonces no hay nota que leer. */
+  alLeer: (() => void) | null;
 }) {
   const [abierta, setAbierta] = useState(false);
   // La prioridad se congela con el primer pomodoro. La interfaz lo enseña en
@@ -296,6 +314,7 @@ function Tarjeta({
             </button>
           </div>
           <Estimador tarea={tarea} recargar={recargar} alFallar={alFallar} />
+          <Entrega tarea={tarea} recargar={recargar} alFallar={alFallar} />
 
           <div className="tarjeta__prioridades">
             {(["high", "medium", "low"] as Prioridad[]).map((p) => (
@@ -319,13 +338,21 @@ function Tarjeta({
               Ya se trabajó: la prioridad con la que se hizo es historia.
             </p>
           )}
+          {/* Leer aqui y abrir en Obsidian son cosas distintas: lo primero es
+              consultar sin soltar lo que estas haciendo, lo segundo es ir a
+              cambiarla. Por eso "Leer" va primero y con mas peso. */}
+          {tarea.vault_note && alLeer !== null && (
+            <button className="boton boton--fino" onClick={alLeer} title={tarea.vault_note}>
+              Leer la nota
+            </button>
+          )}
           {tarea.vault_note && (
             <button
-              className="boton boton--fino"
+              className="boton boton--fino boton--tenue"
               onClick={() => invoke("abrir_nota", { id: tarea.id }).catch((e) => alFallar(String(e)))}
               title={tarea.vault_note}
             >
-              Abrir la nota
+              Abrir en Obsidian
             </button>
           )}
           <button className="boton boton--fino boton--tenue" onClick={borrar}>
@@ -392,6 +419,110 @@ function Estimador({
   );
 }
 
+/**
+ * La fecha de entrega, en la tarjeta.
+ *
+ * Hasta ahora la ventana solo la aceptaba al CREAR la tarea: corregir una fecha
+ * —o ponersela a algo que ya existia— obligaba a salir a `coffe task edit
+ * --due`. Con las tareas que ya hay en la base eso significaba que el
+ * calendario no se podia llenar desde aqui.
+ *
+ * **Es un campo de texto y no un `type="date"` a proposito.** El control nativo
+ * de fecha de este WebKit se deja escribir —los segmentos cambian en pantalla—
+ * pero no dispara `input` ni `change`, y su `.value` se queda vacio: React no
+ * se entera nunca de lo que el usuario escribio. Se comprobo con sondas en los
+ * cuatro eventos: `keyup` disparo seis veces y `change` cero. Es la misma clase
+ * de trampa que la del arrastre —se ve funcionar y no llega el dato— y por eso
+ * el formato se pide a mano, igual que en `coffe task edit --due`.
+ *
+ * Se guarda al salir del campo o con Enter, no en cada tecla: a medio escribir
+ * "2026-0" no es una fecha, y mandar cada pulsacion serian cinco escrituras
+ * invalidas por una buena.
+ */
+function Entrega({
+  tarea,
+  recargar,
+  alFallar,
+}: {
+  tarea: Tarea;
+  recargar: () => void;
+  alFallar: (e: string) => void;
+}) {
+  const guardada = tarea.due_date ?? "";
+  const [borrador, setBorrador] = useState(guardada);
+
+  // Si la tarea cambia por debajo —un import del vault, otra ventana— el campo
+  // sigue a la base y no se queda enseñando lo que ya no es.
+  useEffect(() => setBorrador(guardada), [guardada]);
+
+  const limpio = borrador.trim();
+  const valida = limpio === "" || esFecha(limpio);
+
+  async function guardar() {
+    if (limpio === guardada || !valida) return;
+    try {
+      await invoke("fijar_entrega", { id: tarea.id, fecha: limpio || null });
+    } catch (e) {
+      alFallar(String(e));
+    }
+    recargar();
+  }
+
+  // Con fecha pero sin estimar, la tarea sale en el dia del calendario y NO
+  // pesa en la resta. Se avisa aqui, que es donde se acaba de poner la fecha,
+  // en vez de dejar que el veredicto lo cuente como un hueco mas tarde.
+  const noPesa = guardada !== "" && tarea.estimate_pomodoros === null;
+
+  return (
+    <div className="estimador">
+      <span className="estimador__rotulo">Entrega</span>
+      <div className="entrega">
+        <input
+          className={`campo${valida ? "" : " campo--malo"}`}
+          type="text"
+          inputMode="numeric"
+          maxLength={10}
+          placeholder="AAAA-MM-DD"
+          value={borrador}
+          onChange={(e) => setBorrador(e.target.value)}
+          onBlur={guardar}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") guardar();
+            if (e.key === "Escape") setBorrador(guardada);
+          }}
+          title="sin fecha no entra en el calendario"
+        />
+        {guardada !== "" && (
+          <button
+            className="chip chip--tenue"
+            onClick={() => {
+              setBorrador("");
+              void invoke("fijar_entrega", { id: tarea.id, fecha: null })
+                .catch((e) => alFallar(String(e)))
+                .finally(recargar);
+            }}
+            title="quitar la fecha de entrega"
+          >
+            ×
+          </button>
+        )}
+      </div>
+      {!valida && <p className="tarjeta__nota">Tiene que ser AAAA-MM-DD.</p>}
+      {noPesa && (
+        <p className="tarjeta__nota">Con fecha pero sin estimar: sale en el día y no suma.</p>
+      )}
+    </div>
+  );
+}
+
+/** Una fecha de calendario real. `2026-02-30` encaja con el patrón y no existe,
+ *  asi que ademas se comprueba que sobreviva la ida y vuelta. */
+function esFecha(s: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return false;
+  const d = new Date(`${s}T00:00:00Z`);
+  return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === s;
+}
+
 // ------------------------------------------------------------- compositor
 
 function Compositor({
@@ -414,6 +545,10 @@ function Compositor({
   async function crear(e: React.FormEvent) {
     e.preventDefault();
     if (!titulo.trim() || proyecto === null) return;
+    if (entrega !== "" && !esFecha(entrega)) {
+      alFallar(`la fecha ${entrega} no es AAAA-MM-DD`);
+      return;
+    }
     try {
       await invoke("crear_tarea", {
         projectId: proyecto,
@@ -465,11 +600,18 @@ function Compositor({
         <option value="medium">media</option>
         <option value="low">baja</option>
       </select>
+      {/* Texto y no `type="date"`, por lo mismo que en la tarjeta: el control
+          nativo de este WebKit no reporta su valor a React. Mientras estuvo
+          aqui, toda tarea creada desde la ventana nacio sin fecha —y sin
+          fecha no entra en el calendario— sin que nada lo dijera. */}
       <input
-        className="campo"
-        type="date"
+        className={`campo${entrega === "" || esFecha(entrega) ? "" : " campo--malo"}`}
+        type="text"
+        inputMode="numeric"
+        maxLength={10}
+        placeholder="AAAA-MM-DD"
         value={entrega}
-        onChange={(e) => setEntrega(e.target.value)}
+        onChange={(e) => setEntrega(e.target.value.trim())}
         title="fecha de entrega"
       />
       <input

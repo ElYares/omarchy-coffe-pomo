@@ -19,6 +19,19 @@
   --baja: #7f9a9b;
 }
 
+/* Los controles NATIVOS —el icono del calendario de un `type="date"` y el panel
+   que despliega— los pinta el sistema, no esta hoja. Sin `color-scheme` WebKit
+   asume claro: sobre un tema oscuro el icono queda negro sobre negro y el campo
+   parece no tener boton. Es la misma trampa que la del `<select>`, con la
+   diferencia de que aqui no se arregla con `appearance`. */
+:root[data-tema="oscuro"] {
+  color-scheme: dark;
+}
+
+:root[data-tema="claro"] {
+  color-scheme: light;
+}
+
 :root[data-tema="claro"] {
   --tenue: color-mix(in srgb, var(--tinta) 65%, transparent);
   --placa: color-mix(in srgb, var(--tinta) 6%, transparent);
@@ -1054,6 +1067,26 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
+/* El campo se estira y la × se queda pegada al final. El `min-width` es porque
+   un `input[type=date]` trae un ancho intrinseco que ignora el `flex` sin el. */
+.entrega {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
+/* Un formato que no cuadra se enseña mientras se escribe, sin bloquear: se
+   guarda al salir del campo, y si no es una fecha no se manda nada. */
+.campo--malo {
+  border-color: var(--alta);
+}
+
+.entrega .campo {
+  flex: 1;
+  min-width: 0;
+  font-variant-numeric: tabular-nums;
+}
+
 .chip--puesta {
   border-color: color-mix(in srgb, var(--acento) 55%, transparent);
   color: var(--acento);
@@ -1388,4 +1421,196 @@ body {
   color: var(--tinta);
   font-size: 15px;
   font-variant-numeric: tabular-nums;
+}
+
+/* ------------------------------------------------------ la nota del vault */
+
+/* El panel roba ancho a las columnas en vez de taparlas: leer la nota de una
+   tarea mientras se ve dónde está esa tarea es justo lo que se viene a hacer. */
+.tablero__cuerpo {
+  display: flex;
+  gap: 12px;
+  min-height: 0;
+  flex: 1;
+}
+
+.tablero__cuerpo .columnas {
+  flex: 1;
+  min-width: 0;
+}
+
+.nota {
+  display: flex;
+  flex-direction: column;
+  width: 380px;
+  flex: 0 0 380px;
+  min-height: 0;
+  padding: 12px 14px;
+  border: 1px solid var(--borde);
+  border-radius: 10px;
+  background: var(--placa);
+}
+
+.nota__cabeza {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.nota__titulo {
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.nota__cargando {
+  color: var(--tenue);
+  font-size: 13px;
+}
+
+/* El cuerpo es lo único que crece: la cabecera y el pie se quedan fijos para
+   que la ruta y el botón no se vayan al final de una nota larga. */
+.nota__cuerpo {
+  flex: 1;
+  overflow-y: auto;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.nota__pie {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--borde);
+}
+
+.nota__pie code {
+  color: var(--tenue);
+  font-size: 10px;
+  word-break: break-all;
+}
+
+/* --- el markdown --- */
+
+.md__h {
+  margin: 14px 0 4px;
+  line-height: 1.3;
+}
+
+.md__h:first-child {
+  margin-top: 0;
+}
+
+.md__h1 {
+  font-size: 15px;
+  color: var(--acento);
+}
+
+.md__h2 {
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--tenue);
+}
+
+.md__h3,
+.md__h4 {
+  font-size: 13px;
+}
+
+.md__p {
+  margin: 0 0 8px;
+}
+
+.md__lista {
+  margin: 0 0 8px;
+  padding-left: 18px;
+}
+
+/* Las casillas de los criterios de aceptación no llevan viñeta: el cuadrado ya
+   es la marca, y dos marcas por línea se leen peor que una. */
+.md__tarea {
+  list-style: none;
+  margin-left: -18px;
+}
+
+.md__caja {
+  margin-right: 6px;
+  color: var(--acento);
+}
+
+.md__cita {
+  margin: 0 0 8px;
+  padding-left: 10px;
+  border-left: 2px solid var(--borde);
+  color: var(--tenue);
+}
+
+.md__codigo {
+  margin: 0 0 8px;
+  padding: 8px 10px;
+  overflow-x: auto;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--tinta) 8%, transparent);
+  font-size: 11px;
+}
+
+.nota__cuerpo code {
+  padding: 1px 4px;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--tinta) 10%, transparent);
+  font-size: 11px;
+}
+
+/* Un wikilink lleva a otra nota del vault y este visor solo abre la de la
+   tarea. Se pinta distinto pero no como enlace: prometer un salto que no
+   existe es peor que no prometer nada. */
+.md__wiki {
+  color: var(--acento);
+  border-bottom: 1px dotted color-mix(in srgb, var(--acento) 45%, transparent);
+}
+
+/* En una ventana estrecha el panel se pone debajo en vez de estrangular las
+   columnas. */
+@media (max-width: 900px) {
+  .tablero__cuerpo--con-nota {
+    flex-direction: column;
+  }
+
+  .nota {
+    width: auto;
+    flex: 0 0 auto;
+    max-height: 45vh;
+  }
+}
+
+/* Una tabla ancha se desplaza dentro de su caja. Sin esto estira el panel y se
+   lleva por delante el ancho de las columnas del tablero. */
+.md__tabla-caja {
+  margin: 0 0 8px;
+  overflow-x: auto;
+}
+
+.md__tabla {
+  border-collapse: collapse;
+  font-size: 11px;
+}
+
+.md__tabla th,
+.md__tabla td {
+  padding: 4px 8px;
+  border: 1px solid var(--borde);
+  text-align: left;
+  vertical-align: top;
+}
+
+.md__tabla th {
+  color: var(--tenue);
+  font-weight: 600;
+  white-space: nowrap;
 }
