@@ -3,7 +3,9 @@
 Pomodoro para Omarchy: módulo de waybar + ventana con taza de café.
 
 Lee `docs/ARQUITECTURA.md` antes de tocar el dominio y `docs/FASES.md` para
-saber en qué punto está el trabajo.
+saber en qué punto está el trabajo. `docs/GLOSARIO.md` dice qué significa cada
+palabra del dominio y cuáles no usar: aparcar no es pausar, anular no es
+cancelar, apartar no es borrar.
 
 ## Estructura
 
@@ -63,12 +65,15 @@ activo que al pulsarlo falla.
   en Rust: un daemon con un bug no debe poder dejar dos pomodoros abiertos.
 - **Las migraciones no se editan**, se añaden. `db/schema.rs`, versionadas con
   `PRAGMA user_version`.
-- **Fechas**: RFC 3339 en UTC en la base. El huso se resuelve al pintar.
+- **Fechas**: RFC 3339 en UTC en la base. El huso se resuelve al pintar, y
+  al agrupar por día: un «día» de reporte es un día **local**
+  (`reportes::periodo_de_dias`). `date(ended_at)` en SQL es el día UTC y a las
+  18:00 de Monterrey ya es mañana.
 
 ## Comprobar
 
 ```bash
-cargo test                   # 114 pruebas
+cargo test                   # 139 pruebas
 cargo clippy --all-targets   # sin avisos
 cargo fmt --check
 cd app && pnpm build         # tsc estricto + vite

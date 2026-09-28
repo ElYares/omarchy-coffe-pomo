@@ -6,3 +6,4 @@ Generado por `vaultdocs index`. Una linea por documento para poder elegir que le
 |---|---|---|
 | [`ARQUITECTURA.md`](ARQUITECTURA.md) | Arquitectura | 218 |
 | [`FASES.md`](FASES.md) | Fases | 266 |
+| [`GLOSARIO.md`](GLOSARIO.md) | Glosario | 130 |
