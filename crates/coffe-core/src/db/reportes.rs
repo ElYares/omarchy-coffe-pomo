@@ -5,10 +5,10 @@
 //! va en cada proyecto, y si tus estimaciones sirven para algo.
 
 use super::tasks::FiltroTareas;
-use super::{Db, a_texto};
+use super::{Db, a_texto, de_texto};
 use crate::error::CoffeError;
 use crate::model::TaskState;
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Duration, NaiveDate, TimeZone, Utc};
 use rusqlite::params;
 use serde::{Deserialize, Serialize};
 
@@ -81,24 +81,128 @@ impl Precision {
     }
 }
 
-impl Db {
-    pub fn resumen_periodo(
-        &self,
-        desde: DateTime<Utc>,
-        hasta: DateTime<Utc>,
-    ) -> Result<ResumenPeriodo, CoffeError> {
-        let (d, h) = (a_texto(desde), a_texto(hasta));
+/// Un día del mapa de calor.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DiaActividad {
+    /// En el huso del usuario: un pomodoro de las 23:30 es de ese día, no del
+    /// siguiente en UTC.
+    pub fecha: NaiveDate,
+    pub completados: u32,
+    /// Van aparte y no suben el escalón, pero un día en que todo se tiró no es
+    /// un día vacío y no debe pintarse como uno.
+    pub anulados: u32,
+    pub escalon: u8,
+}
 
-        let (completados, anulados, efectivos, dias): (u32, u32, i64, u32) = self.conn.query_row(
+/// Dónde empieza cada escalón del mapa, en pomodoros completados.
+///
+/// Son fijos a propósito. Una escala relativa al mejor día del periodo pinta
+/// el mismo día de otro color según el rango que mires, y en un mes flojo sus
+/// días buenos salen tan oscuros como los de uno fuerte. 12 es una jornada
+/// completa de Cirillo: tres series de cuatro.
+pub const CORTES_DEL_MAPA: [u32; 4] = [1, 4, 8, 12];
+
+/// 0 si no sonó ninguno; 1 a 4 según `CORTES_DEL_MAPA`.
+pub fn escalon(completados: u32) -> u8 {
+    CORTES_DEL_MAPA.iter().filter(|&&c| completados >= c).count() as u8
+}
+
+/// Los últimos `dias` días, hoy incluido, en días enteros del huso de `ahora`.
+///
+/// Arranca a medianoche y no en `ahora − dias × 24 h`: si no, el primer día del
+/// periodo sería un día a medias y el mapa enseñaría una casilla que cuenta
+/// solo un trozo de la mañana.
+pub fn periodo_de_dias<Tz: TimeZone>(
+    dias: u32,
+    ahora: DateTime<Tz>,
+) -> (DateTime<Tz>, DateTime<Tz>) {
+    let tz = ahora.timezone();
+    let primero = ahora.date_naive() - Duration::days(dias.max(1) as i64 - 1);
+    let medianoche = primero.and_hms_opt(0, 0, 0).expect("medianoche siempre existe");
+    let desde = tz
+        .from_local_datetime(&medianoche)
+        .earliest()
+        // Un día con cambio de horario puede no tener medianoche. Ese día se
+        // cuenta desde la medianoche UTC y nadie se entera.
+        .unwrap_or_else(|| tz.from_utc_datetime(&medianoche));
+    (desde, ahora)
+}
+
+impl Db {
+    /// Los días de `[desde, hasta)` en el huso de `desde`, cada uno con lo que
+    /// sonó y lo que se tiró. Están todos, también los de cero: un hueco en la
+    /// cuadrícula se leería como un día que no existió.
+    pub fn actividad_por_dia<Tz: TimeZone>(
+        &self,
+        desde: &DateTime<Tz>,
+        hasta: &DateTime<Tz>,
+    ) -> Result<Vec<DiaActividad>, CoffeError> {
+        let tz = desde.timezone();
+        let primero = desde.date_naive();
+        let ultimo = (hasta.clone() - Duration::nanoseconds(1)).date_naive();
+        if ultimo < primero {
+            return Ok(Vec::new());
+        }
+
+        let mut dias: Vec<DiaActividad> = primero
+            .iter_days()
+            .take_while(|d| *d <= ultimo)
+            .map(|fecha| DiaActividad { fecha, completados: 0, anulados: 0, escalon: 0 })
+            .collect();
+
+        // SQLite no sabe en qué huso vive el usuario, así que el día se saca
+        // aquí y no con `date(ended_at)`, que es el día UTC.
+        let mut stmt = self.conn.prepare(
+            "SELECT ended_at, outcome FROM pomodoros
+             WHERE ended_at >= ?1 AND ended_at < ?2 AND outcome IN ('completed', 'voided')",
+        )?;
+        let filas = stmt.query_map(
+            params![a_texto(desde.with_timezone(&Utc)), a_texto(hasta.with_timezone(&Utc))],
+            |f| Ok((f.get::<_, String>(0)?, f.get::<_, String>(1)?)),
+        )?;
+        for fila in filas {
+            let (fin, outcome) = fila?;
+            let fecha = de_texto(&fin)?.with_timezone(&tz).date_naive();
+            let i = (fecha - primero).num_days();
+            let Some(dia) = usize::try_from(i).ok().and_then(|i| dias.get_mut(i)) else {
+                continue;
+            };
+            if outcome == "completed" {
+                dia.completados += 1;
+            } else {
+                dia.anulados += 1;
+            }
+        }
+
+        for dia in &mut dias {
+            dia.escalon = escalon(dia.completados);
+        }
+        Ok(dias)
+    }
+
+    /// Lo que pasó entre `desde` y `hasta`. Los días se cuentan en el huso de
+    /// `desde`.
+    pub fn resumen_periodo<Tz: TimeZone>(
+        &self,
+        desde: DateTime<Tz>,
+        hasta: DateTime<Tz>,
+    ) -> Result<ResumenPeriodo, CoffeError> {
+        // Los días con trabajo salen del mapa y no de otra consulta: son la
+        // misma regla, y escrita dos veces acabaría contando distinto.
+        let dias =
+            self.actividad_por_dia(&desde, &hasta)?.iter().filter(|d| d.completados > 0).count()
+                as u32;
+        let (d, h) = (a_texto(desde.with_timezone(&Utc)), a_texto(hasta.with_timezone(&Utc)));
+
+        let (completados, anulados, efectivos): (u32, u32, i64) = self.conn.query_row(
             "SELECT
                      COUNT(*) FILTER (WHERE outcome = 'completed'),
                      COUNT(*) FILTER (WHERE outcome = 'voided'),
-                     COALESCE(SUM(planned_secs) FILTER (WHERE outcome = 'completed'), 0),
-                     COUNT(DISTINCT date(ended_at)) FILTER (WHERE outcome = 'completed')
+                     COALESCE(SUM(planned_secs) FILTER (WHERE outcome = 'completed'), 0)
                  FROM pomodoros
                  WHERE ended_at >= ?1 AND ended_at < ?2",
             params![d, h],
-            |f| Ok((f.get(0)?, f.get(1)?, f.get(2)?, f.get(3)?)),
+            |f| Ok((f.get(0)?, f.get(1)?, f.get(2)?)),
         )?;
 
         let terminadas: u32 = self.conn.query_row(

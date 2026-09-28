@@ -258,3 +258,149 @@ fn un_periodo_vacio_no_divide_entre_cero() {
     assert_eq!(r.tasa_de_anulacion(), 0.0);
     assert!(db.carga_por_proyecto(t0(), t0() + Duration::days(1)).unwrap().is_empty());
 }
+
+// --- El mapa de calor -------------------------------------------------------
+
+use chrono::{FixedOffset, NaiveDate};
+use coffe_core::db::reportes::{CORTES_DEL_MAPA, escalon, periodo_de_dias};
+
+/// Monterrey: −06:00, sin horario de verano.
+fn mty() -> FixedOffset {
+    FixedOffset::west_opt(6 * 3600).unwrap()
+}
+
+fn dia(a: i32, m: u32, d: u32) -> NaiveDate {
+    NaiveDate::from_ymd_opt(a, m, d).unwrap()
+}
+
+#[test]
+fn un_pomodoro_de_noche_es_del_dia_local_y_no_del_siguiente_en_utc() {
+    let db = Db::en_memoria().unwrap();
+    let p = proyecto(&db, None, "strapp");
+    let t = tarea(&db, p, "una", None);
+
+    // Termina a las 23:30 en Monterrey, que ya es el día 8 a las 05:30 UTC.
+    let inicio = mty().with_ymd_and_hms(2026, 9, 7, 23, 5, 0).unwrap();
+    suena(&db, t, inicio.with_timezone(&Utc));
+
+    let ahora = mty().with_ymd_and_hms(2026, 9, 8, 12, 0, 0).unwrap();
+    let (d, h) = periodo_de_dias(2, ahora);
+    let mapa = db.actividad_por_dia(&d, &h).unwrap();
+
+    assert_eq!(mapa.len(), 2);
+    assert_eq!((mapa[0].fecha, mapa[0].completados), (dia(2026, 9, 7), 1));
+    assert_eq!((mapa[1].fecha, mapa[1].completados), (dia(2026, 9, 8), 0));
+}
+
+#[test]
+fn el_mapa_trae_todos_los_dias_del_periodo_tambien_los_vacios() {
+    let db = Db::en_memoria().unwrap();
+    let ahora = mty().with_ymd_and_hms(2026, 9, 28, 10, 0, 0).unwrap();
+
+    let (d, h) = periodo_de_dias(30, ahora);
+    let mapa = db.actividad_por_dia(&d, &h).unwrap();
+
+    assert_eq!(mapa.len(), 30);
+    assert_eq!(mapa.first().unwrap().fecha, dia(2026, 8, 30));
+    assert_eq!(mapa.last().unwrap().fecha, dia(2026, 9, 28), "hoy va incluido");
+    assert!(mapa.windows(2).all(|w| w[1].fecha == w[0].fecha.succ_opt().unwrap()));
+    assert!(mapa.iter().all(|x| x.completados == 0 && x.escalon == 0));
+}
+
+#[test]
+fn el_periodo_empieza_a_medianoche_local() {
+    // Si empezara en `ahora − N × 24 h`, la primera casilla contaría solo un
+    // trozo de su día.
+    let ahora = mty().with_ymd_and_hms(2026, 9, 28, 10, 0, 0).unwrap();
+    let (d, h) = periodo_de_dias(7, ahora);
+
+    assert_eq!(d, mty().with_ymd_and_hms(2026, 9, 22, 0, 0, 0).unwrap());
+    assert_eq!(h, ahora);
+}
+
+#[test]
+fn los_dias_con_trabajo_son_las_casillas_con_algo_que_sono() {
+    // Dos pomodoros del mismo día local, a las 17:00 y a las 20:00. En UTC el
+    // segundo ya es del día siguiente: contados con `date(ended_at)` serían
+    // dos días de trabajo, y fue uno.
+    let db = Db::en_memoria().unwrap();
+    let p = proyecto(&db, None, "strapp");
+    let t = tarea(&db, p, "una", None);
+
+    for hora in [17, 20] {
+        suena(&db, t, mty().with_ymd_and_hms(2026, 9, 20, hora, 0, 0).unwrap().with_timezone(&Utc));
+    }
+    se_tira(&db, t, mty().with_ymd_and_hms(2026, 9, 23, 9, 0, 0).unwrap().with_timezone(&Utc));
+
+    let ahora = mty().with_ymd_and_hms(2026, 9, 28, 10, 0, 0).unwrap();
+    let (d, h) = periodo_de_dias(30, ahora);
+    let mapa = db.actividad_por_dia(&d, &h).unwrap();
+    let r = db.resumen_periodo(d, h).unwrap();
+
+    let casillas = mapa.iter().filter(|x| x.completados > 0).count() as u32;
+    assert_eq!(r.dias_con_trabajo, casillas);
+    assert_eq!(r.dias_con_trabajo, 1);
+}
+
+#[test]
+fn los_escalones_tienen_cortes_fijos() {
+    assert_eq!(CORTES_DEL_MAPA, [1, 4, 8, 12]);
+    let casos = [(0, 0), (1, 1), (3, 1), (4, 2), (7, 2), (8, 3), (11, 3), (12, 4), (40, 4)];
+    for (completados, esperado) in casos {
+        assert_eq!(escalon(completados), esperado, "{completados} pomodoros");
+    }
+}
+
+#[test]
+fn un_dia_tiene_el_mismo_escalon_mire_el_periodo_que_mire() {
+    // Con una escala relativa al mejor día, el día 20 sería el más oscuro en
+    // 7 días y uno pálido en un año con un día de 12.
+    let db = Db::en_memoria().unwrap();
+    let p = proyecto(&db, None, "strapp");
+    let t = tarea(&db, p, "una", None);
+
+    for h in 0..5 {
+        suena(
+            &db,
+            t,
+            mty().with_ymd_and_hms(2026, 9, 25, 8 + h, 0, 0).unwrap().with_timezone(&Utc),
+        );
+    }
+    for h in 0..12 {
+        suena(
+            &db,
+            t,
+            mty().with_ymd_and_hms(2026, 3, 2, 8, 0, 0).unwrap().with_timezone(&Utc)
+                + Duration::minutes(30 * h),
+        );
+    }
+
+    let ahora = mty().with_ymd_and_hms(2026, 9, 28, 10, 0, 0).unwrap();
+    let escalon_del_25 = |dias| {
+        let (d, h) = periodo_de_dias(dias, ahora);
+        db.actividad_por_dia(&d, &h)
+            .unwrap()
+            .into_iter()
+            .find(|x| x.fecha == dia(2026, 9, 25))
+            .unwrap()
+            .escalon
+    };
+
+    assert_eq!(escalon_del_25(7), 2);
+    assert_eq!(escalon_del_25(365), 2);
+}
+
+#[test]
+fn un_dia_en_que_todo_se_tiro_no_es_un_dia_vacio() {
+    let db = Db::en_memoria().unwrap();
+    let p = proyecto(&db, None, "strapp");
+    let t = tarea(&db, p, "una", None);
+
+    se_tira(&db, t, mty().with_ymd_and_hms(2026, 9, 27, 9, 0, 0).unwrap().with_timezone(&Utc));
+
+    let ahora = mty().with_ymd_and_hms(2026, 9, 28, 10, 0, 0).unwrap();
+    let (d, h) = periodo_de_dias(2, ahora);
+    let mapa = db.actividad_por_dia(&d, &h).unwrap();
+
+    assert_eq!((mapa[0].completados, mapa[0].anulados, mapa[0].escalon), (0, 1, 0));
+}

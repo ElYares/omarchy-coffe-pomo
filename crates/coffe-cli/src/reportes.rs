@@ -6,9 +6,9 @@
 //! que en veinte — y un porcentaje sobre tres casos no es un porcentaje.
 
 use anyhow::Result;
-use chrono::{Duration, Utc};
+use chrono::{Local, Utc};
 use coffe_core::Db;
-use coffe_core::db::reportes::{Exportacion, Precision};
+use coffe_core::db::reportes::{Exportacion, Precision, periodo_de_dias};
 
 use crate::ExportCmd;
 
@@ -16,8 +16,8 @@ use crate::ExportCmd;
 const MINIMO_PARA_HABLAR_DE_TENDENCIA: u32 = 5;
 
 pub fn pintar(db: &Db, dias: u32) -> Result<()> {
-    let hasta = Utc::now();
-    let desde = hasta - Duration::days(dias.clamp(1, 3650) as i64);
+    // En días locales: los mismos que enseña el mapa de la ventana.
+    let (desde, hasta) = periodo_de_dias(dias.clamp(1, 3650), Local::now());
 
     let r = db.resumen_periodo(desde, hasta)?;
     println!("Últimos {dias} días\n");
@@ -51,7 +51,7 @@ pub fn pintar(db: &Db, dias: u32) -> Result<()> {
         println!("  con Claude  : {}", duracion(r.segundos_con_claude));
     }
 
-    let cargas = db.carga_por_proyecto(desde, hasta)?;
+    let cargas = db.carga_por_proyecto(desde.with_timezone(&Utc), hasta.with_timezone(&Utc))?;
     if !cargas.is_empty() {
         println!("\nDónde se fue");
         let tope = cargas.iter().map(|c| c.segundos_efectivos).max().unwrap_or(1).max(1);
