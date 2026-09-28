@@ -13,7 +13,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { save } from "@tauri-apps/plugin-dialog";
-import { duracion, type Reporte } from "./tipos";
+import { duracion, type DiaActividad, type Reporte } from "./tipos";
 
 /** Por debajo de esto, un porcentaje es una anécdota con decimales. */
 const MINIMO_PARA_HABLAR_DE_TENDENCIA = 5;
@@ -111,6 +111,7 @@ export function Reportes() {
       ) : (
         <div className="reporte__cuerpo">
           <Cifras rep={rep} />
+          <Mapa rep={rep} />
           <Reparto rep={rep} />
           <Estimaciones rep={rep} />
         </div>
@@ -184,6 +185,115 @@ function Cifra({ rotulo, valor, pie }: { rotulo: string; valor: string; pie?: st
       <dt>{rotulo}</dt>
       <dd>{valor}</dd>
       {pie && <p className="cifra__pie">{pie}</p>}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------- el mapa
+
+const DIAS_SEMANA = ["lun", "mar", "mié", "jue", "vie", "sáb", "dom"];
+const MESES = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
+
+/** `AAAA-MM-DD` a fecha local. `new Date("AAAA-MM-DD")` la leería como UTC y
+ *  en −06:00 caería en el día anterior: justo el error que el mapa corrige. */
+function fechaLocal(iso: string): Date {
+  const [a, m, d] = iso.split("-").map(Number);
+  return new Date(a, m - 1, d);
+}
+
+/** Qué pinta el mapa. Aquí no se cuenta nada: los días, sus cifras y el
+ *  escalón vienen del núcleo. Solo se acomodan en semanas. */
+function Mapa({ rep }: { rep: Reporte }) {
+  if (rep.mapa.length === 0) return null;
+
+  // Columnas de lunes a domingo. La primera semana se rellena por delante para
+  // que cada fila sea siempre el mismo día de la semana.
+  const hueco = (fechaLocal(rep.mapa[0].fecha).getDay() + 6) % 7;
+  const casillas: (DiaActividad | null)[] = [...Array(hueco).fill(null), ...rep.mapa];
+  const semanas: (DiaActividad | null)[][] = [];
+  for (let i = 0; i < casillas.length; i += 7) semanas.push(casillas.slice(i, i + 7));
+
+  const tirados = rep.mapa.filter((d) => d.completados === 0 && d.anulados > 0).length;
+
+  return (
+    <section className="reporte__bloque">
+      <h2>Día a día</h2>
+      <div className="mapa">
+        <div className="mapa__semana mapa__semana--rotulos">
+          <span className="mapa__mes" />
+          {DIAS_SEMANA.map((d, i) => (
+            <span key={d} className="mapa__rotulo">
+              {i % 2 === 0 ? d : ""}
+            </span>
+          ))}
+        </div>
+        {semanas.map((semana, i) => (
+          <div key={i} className="mapa__semana">
+            <span className="mapa__mes">{rotuloDeMes(semana)}</span>
+            {semana.map((dia, j) =>
+              dia === null ? (
+                <span key={j} className="mapa__dia mapa__dia--fuera" />
+              ) : (
+                <span
+                  key={j}
+                  className={
+                    `mapa__dia mapa__dia--${dia.escalon}` +
+                    (dia.completados === 0 && dia.anulados > 0 ? " mapa__dia--tirado" : "")
+                  }
+                  title={descripcion(dia)}
+                />
+              ),
+            )}
+          </div>
+        ))}
+      </div>
+      <Leyenda cortes={rep.cortes} />
+      {tirados > 0 && (
+        <p className="reporte__pista">
+          {tirados} día(s) con pomodoros empezados y ninguno que sonara: van con
+          borde, porque vacíos no estuvieron.
+        </p>
+      )}
+    </section>
+  );
+}
+
+/** El mes, solo en la semana donde empieza. Si no, 53 columnas con su rótulo
+ *  se leerían peor que ninguna. */
+function rotuloDeMes(semana: (DiaActividad | null)[]): string {
+  const primero = semana.find((d) => d !== null && fechaLocal(d.fecha).getDate() === 1);
+  return primero ? MESES[fechaLocal(primero.fecha).getMonth()] : "";
+}
+
+function descripcion(d: DiaActividad): string {
+  const f = fechaLocal(d.fecha);
+  const fecha = `${DIAS_SEMANA[(f.getDay() + 6) % 7]} ${f.getDate()} ${MESES[f.getMonth()]}`;
+  const tirados = d.anulados > 0 ? ` · ${d.anulados} tirado(s)` : "";
+  return `${fecha}: ${d.completados} sonaron${tirados}`;
+}
+
+/** Los cortes con sus números. Un color sin su rango obliga a adivinar si
+ *  «oscuro» son cinco pomodoros o quince. */
+function Leyenda({ cortes }: { cortes: number[] }) {
+  const rangos = cortes.map((c, i) => {
+    const siguiente = cortes[i + 1];
+    if (siguiente === undefined) return `${c}+`;
+    return siguiente - 1 === c ? String(c) : `${c}–${siguiente - 1}`;
+  });
+
+  return (
+    <div className="mapa__leyenda">
+      <span className="mapa__muestra">
+        <i className="mapa__dia mapa__dia--0" /> 0
+      </span>
+      {rangos.map((r, i) => (
+        <span key={r} className="mapa__muestra">
+          <i className={`mapa__dia mapa__dia--${i + 1}`} /> {r}
+        </span>
+      ))}
+      <span className="mapa__muestra">
+        <i className="mapa__dia mapa__dia--0 mapa__dia--tirado" /> solo tirados
+      </span>
     </div>
   );
 }

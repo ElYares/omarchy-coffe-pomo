@@ -10,7 +10,10 @@ use anyhow::Result;
 use coffe_core::agenda::{Plan, Vencimiento, planificar_todo};
 use coffe_core::config::Config;
 use coffe_core::db::projects::{NuevoProyecto, Project};
-use coffe_core::db::reportes::{CargaProyecto, Exportacion, Precision, ResumenPeriodo};
+use coffe_core::db::reportes::{
+    CORTES_DEL_MAPA, CargaProyecto, DiaActividad, Exportacion, Precision, ResumenPeriodo,
+    periodo_de_dias,
+};
 use coffe_core::db::tasks::{CambiosTarea, FiltroTareas, NuevaTarea, Task};
 use coffe_core::model::{InterruptionKind, Priority, TaskState};
 use coffe_core::tablero::{Destino, Escritura, Movida, decidir};
@@ -77,6 +80,11 @@ struct ReporteVista {
     cargas: Vec<CargaProyecto>,
     precision: Precision,
     factor: Option<f64>,
+    /// Un día por casilla, con su escalón ya puesto.
+    mapa: Vec<DiaActividad>,
+    /// Los cortes de los escalones, para la leyenda. Viajan con el reporte
+    /// para que la ventana no tenga su propia copia de los números.
+    cortes: [u32; 4],
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -593,11 +601,15 @@ fn agenda(estado: State<'_, Estado>, dias: u32) -> Result<Plan, String> {
 fn reporte(estado: State<'_, Estado>, dias: u32) -> Result<ReporteVista, String> {
     let db = estado.db.lock().map_err(|e| e.to_string())?;
     let dias = dias.clamp(1, 3650);
-    let hasta = chrono::Utc::now();
-    let desde = hasta - chrono::Duration::days(dias as i64);
+    // Días enteros y locales, para que cada casilla del mapa sea un día y no
+    // un trozo.
+    let (desde, hasta) = periodo_de_dias(dias, chrono::Local::now());
 
+    let mapa = db.actividad_por_dia(&desde, &hasta).map_err(|e| e.to_string())?;
     let resumen = db.resumen_periodo(desde, hasta).map_err(|e| e.to_string())?;
-    let cargas = db.carga_por_proyecto(desde, hasta).map_err(|e| e.to_string())?;
+    let cargas = db
+        .carga_por_proyecto(desde.with_timezone(&chrono::Utc), hasta.with_timezone(&chrono::Utc))
+        .map_err(|e| e.to_string())?;
     let precision = db.precision_estimacion().map_err(|e| e.to_string())?;
 
     Ok(ReporteVista {
@@ -607,6 +619,8 @@ fn reporte(estado: State<'_, Estado>, dias: u32) -> Result<ReporteVista, String>
         resumen,
         cargas,
         precision,
+        mapa,
+        cortes: CORTES_DEL_MAPA,
     })
 }
 

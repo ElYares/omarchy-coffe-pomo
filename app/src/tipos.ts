@@ -214,8 +214,20 @@ export interface Precision {
   sin_estimar: number;
 }
 
-/** El reporte entero. La tasa y el factor vienen calculados del backend: no se
- *  recalculan aquí o serían dos versiones del mismo número. */
+/** Un día del mapa de calor, en día local. */
+export interface DiaActividad {
+  /** `AAAA-MM-DD`. */
+  fecha: string;
+  completados: number;
+  /** Aparte: no suben el escalón, pero un día en que todo se tiró no es un
+   *  día vacío. */
+  anulados: number;
+  /** 0 a 4, ya calculado por el núcleo con cortes fijos. */
+  escalon: number;
+}
+
+/** El reporte entero. La tasa, el factor y los escalones vienen calculados del
+ *  backend: no se recalculan aquí o serían dos versiones del mismo número. */
 export interface Reporte {
   dias: number;
   resumen: ResumenPeriodo;
@@ -223,6 +235,10 @@ export interface Reporte {
   cargas: CargaProyecto[];
   precision: Precision;
   factor: number | null;
+  mapa: DiaActividad[];
+  /** Dónde empieza cada escalón, en pomodoros completados. Solo para la
+   *  leyenda. */
+  cortes: number[];
 }
 
 /** `1 h 20 min`, o un guion cuando no hay nada que contar. */
